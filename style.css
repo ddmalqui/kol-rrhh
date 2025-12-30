@@ -1,0 +1,809 @@
+/* KOL RRHH — opción A (card clean, 2 columnas, estado arriba derecha) v1.0.4 */
+
+/* ===== Base / Layout ===== */
+.kolrrhh-app{ font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+.kolrrhh-shell{
+  display:grid;
+  grid-template-columns: 360px 1fr;
+  gap: 18px;
+  align-items: start;
+}
+@media (max-width: 900px){
+  .kolrrhh-shell{ grid-template-columns: 1fr; }
+}
+
+.kolrrhh-left, .kolrrhh-right{ min-width: 0; }
+
+/* LEFT: solo la lista scrollea */
+.kolrrhh-left{
+  position: sticky;
+  top: 12px;
+}
+@media (max-width: 900px){
+  .kolrrhh-left{ position: static; }
+}
+
+/* ===== Header izquierdo ===== */
+.kolrrhh-title{
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 14px 14px 12px;
+  border-radius: 14px;
+  background: rgba(0,0,0,.04);
+}
+.kolrrhh-title h2{ margin:0; font-size: 18px; }
+
+/* Acciones en una misma línea: badge + plus */
+.kolrrhh-top-actions{
+  display:flex;
+  gap: 10px;
+  align-items:center;
+}
+
+/* Badge (se usa para número y para el +) */
+.kolrrhh-badge{
+  min-width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight: 950;
+  font-size: 15px;
+  border: 1px solid rgba(0,0,0,.10);
+  background: rgba(0,0,0,.04);
+  color: #111;
+  padding: 0 12px;
+}
+
+/* Badge verde para activos */
+.kolrrhh-badge-green{
+  background: rgba(46, 204, 113, .18);
+  color: #0b3d1e;
+  border: 1px solid rgba(46, 204, 113, .45);
+}
+
+/* Botón + con mismo estilo que el badge verde */
+.kolrrhh-add{
+  cursor: pointer;
+  user-select: none;
+}
+.kolrrhh-add:hover{
+  filter: brightness(0.98);
+}
+
+/* ===== Scroll de lista ===== */
+.kolrrhh-left-scroll{
+  margin-top: 12px;
+  max-height: calc(100vh - 160px);
+  overflow-y: auto;
+  padding-right: 6px;
+}
+.kolrrhh-left-scroll::-webkit-scrollbar{ width: 10px; }
+.kolrrhh-left-scroll::-webkit-scrollbar-thumb{ background: rgba(0,0,0,.12); border-radius: 999px; }
+.kolrrhh-left-scroll::-webkit-scrollbar-track{ background: rgba(0,0,0,.04); border-radius: 999px; }
+
+.kolrrhh-section-h{
+  font-size: 12px; font-weight: 700; letter-spacing:.02em;
+  opacity:.75; margin: 10px 4px 8px;
+}
+
+.kolrrhh-list{
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(0,0,0,.06);
+  overflow:hidden;
+}
+
+/* ===== Item de lista (todo en una línea) ===== */
+.kolrrhh-item{
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  padding: 14px 14px;
+  border: 0;
+  background: transparent;
+  text-align:left;
+  cursor:pointer;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+.kolrrhh-item:last-child{ border-bottom:0; }
+.kolrrhh-item:hover{ background: rgba(0,0,0,.03); }
+.kolrrhh-item.is-selected{ background: rgba(0,0,0,.06); }
+
+/* Bloque izquierdo dentro del item */
+.kolrrhh-leftcol{
+  display:flex;
+  align-items:center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.kolrrhh-avatar{
+  width: 44px; height: 44px; border-radius: 14px;
+  display:flex; align-items:center; justify-content:center;
+  color:#fff; font-weight:900;
+  background: linear-gradient(180deg, #ffb13a, #ff7a2f);
+  flex: 0 0 auto;
+  font-size: 16px;
+}
+
+.kolrrhh-meta{
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  flex:1 1 auto;
+}
+.kolrrhh-name{
+  font-weight: 850;
+  font-size: 14px;
+  line-height:1.15;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  color:#4a4a4a;
+}
+.kolrrhh-sub{
+  font-size: 12px;
+  opacity:.75;
+  margin-top:3px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  font-weight: 700;
+}
+
+/* Acciones a la derecha dentro del item (estado + lapicito) */
+.kolrrhh-right-actions{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+/* Estado */
+.kolrrhh-pill{
+  font-size: 12px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-weight: 900;
+  border: 1px solid rgba(0,0,0,.08);
+  background: rgba(0,0,0,.03);
+  flex: 0 0 auto;
+}
+.kolrrhh-pill.is-ok{
+  background: rgba(46, 204, 113, .18);
+  border-color: rgba(46, 204, 113, .45);
+  color: #0b3d1e;
+}
+.kolrrhh-pill.is-off{
+  background: rgba(0,0,0,.05);
+}
+
+/* Botón editar (lapicito) */
+.kolrrhh-edit-icon{
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.12);
+  background: #fff;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size: 14px;
+  line-height: 1;
+}
+.kolrrhh-edit-icon:hover{
+  background: rgba(0,0,0,.03);
+}
+
+/* ===== RIGHT card (sticky) ===== */
+.kolrrhh-card{
+  position: sticky;
+  top: 12px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 14px 40px rgba(0,0,0,.08);
+  overflow:hidden;
+}
+@media (max-width: 900px){
+  .kolrrhh-card{ position: static; }
+}
+
+/* =========================
+   DETALLE — OPCIÓN A
+   compactado (2 columnas)
+   ========================= */
+.kolrrhh-detail{ padding: 16px; }
+
+.kolrrhh-dh{
+  display:flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(0,0,0,.03);
+}
+.kolrrhh-dh-title{ min-width: 0; }
+.kolrrhh-dh-name{
+  font-weight: 950;
+  font-size: 18px;
+  letter-spacing: .01em;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.kolrrhh-dh-sub{
+  margin-top: 4px;
+  font-size: 12px;
+  opacity:.75;
+  font-weight: 700;
+}
+
+.kolrrhh-status{
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 950;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.10);
+  background: rgba(0,0,0,.03);
+}
+.kolrrhh-status.is-ok{ background: rgba(46, 204, 113, .18); border-color: rgba(46, 204, 113, .40); }
+.kolrrhh-status.is-off{ background: rgba(0,0,0,.06); }
+
+.kolrrhh-grid{
+  margin-top: 12px;
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+}
+@media (max-width: 900px){
+  .kolrrhh-grid{ grid-template-columns: 1fr; }
+}
+
+.kolrrhh-field{
+  display:grid;
+  grid-template-columns: 120px 1fr;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,.05);
+  background: #fff;
+}
+
+.kolrrhh-k{
+  opacity:.6;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing:.02em;
+}
+
+.kolrrhh-v{
+  font-weight: 800;
+  font-size: 12px;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+/* Empty */
+.kolrrhh-empty{ display:flex; gap: 12px; align-items:flex-start; padding: 14px; border-radius: 16px; background: rgba(0,0,0,.03); }
+.kolrrhh-empty-dot{ width: 12px; height: 12px; margin-top: 3px; border-radius: 99px; background: #ff7a2f; }
+.kolrrhh-empty-h{ font-weight: 950; }
+.kolrrhh-empty-p{ opacity:.75; font-size: 13px; margin-top:2px; }
+
+/* Tabs placeholder */
+.kolrrhh-tabs{
+  display:flex; gap: 10px;
+  padding: 10px 14px 0;
+  border-top: 1px solid rgba(0,0,0,.06);
+}
+.kolrrhh-tab{
+  appearance:none; border: 1px solid rgba(0,0,0,.12);
+  background: #fff;
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-weight: 900;
+  font-size: 12px;
+  cursor:pointer;
+}
+.kolrrhh-tab.is-active{
+  border-color: rgba(0,0,0,.35);
+  box-shadow: 0 8px 20px rgba(0,0,0,.06);
+}
+.kolrrhh-tabpanes{ padding: 12px 16px 6px; }
+.kolrrhh-tabpane{ display:none; }
+.kolrrhh-tabpane.is-active{ display:block; }
+
+.kolrrhh-footnote{ padding: 8px 16px 16px; font-size: 12px; opacity:.6; }
+.kolrrhh-muted{ padding: 12px; font-size: 12px; opacity: .7; }
+
+/* ===== Modal estilo "tarjeta detalle" ===== */
+.kolrrhh-modal{
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: none;
+}
+
+.kolrrhh-modal.is-open{ display:block; }
+
+.kolrrhh-modal-backdrop{
+  position:absolute;
+  inset:0;
+  background: rgba(0,0,0,.45);
+}
+
+.kolrrhh-modal-card{
+  position: relative;
+  width: min(760px, calc(100vw - 28px));
+  margin: 9vh auto 0;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  overflow: hidden;
+}
+
+.kolrrhh-modal-h{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding: 18px 18px;
+  background: rgba(0,0,0,.03);
+}
+
+.kolrrhh-modal-title{
+  font-weight: 950;
+  font-size: 22px;
+  letter-spacing: .2px;
+}
+
+.kolrrhh-modal-x{
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.12);
+  background: #fff;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.kolrrhh-modal-b{ padding: 16px 18px 8px; }
+
+.kolrrhh-modal-input{
+  width: 100%;
+  padding: 12px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(0,0,0,.10);
+  outline: none;
+  font-weight: 900;
+  font-size: 16px;
+  background: #fff;
+}
+
+.kolrrhh-modal-input:focus{
+  border-color: rgba(0,0,0,.25);
+  box-shadow: 0 10px 24px rgba(0,0,0,.08);
+}
+
+.kolrrhh-modal-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap: 10px;
+  padding: 10px 18px 18px;
+}
+/* ===== Cards Detalle Liquidación (Pestaña 1) ===== */
+.kolrrhh-sueldo-card{
+  background:#fff;
+  border:1px solid rgba(0,0,0,.06);
+  border-radius:14px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.06);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+
+.kolrrhh-sueldo-card-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+
+.kolrrhh-sueldo-card-title{
+  font-weight: 900;
+  font-size: 14px;
+  opacity: .8;
+}
+
+.kolrrhh-sueldo-card-periodo{
+  font-weight: 900;
+  font-size: 13px;
+  opacity: .75;
+}
+
+.kolrrhh-sueldo-card-body{
+  padding-top: 12px;
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+}
+
+.kolrrhh-sueldo-item{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(0,0,0,.03);
+  border: 1px solid rgba(0,0,0,.05);
+}
+
+.kolrrhh-sueldo-k{
+  font-size: 12px;
+  font-weight: 900;
+  opacity: .65;
+  text-transform: none;
+}
+
+.kolrrhh-sueldo-v{
+  font-size: 13px;
+  font-weight: 950;
+  opacity: .9;
+}
+
+/* responsive */
+@media (max-width: 900px){
+  .kolrrhh-sueldo-card-body{
+    grid-template-columns: 1fr;
+  }
+}
+/* FORCE: items en 2 columnas */
+#kolrrhh-sueldo-items .kolrrhh-sueldo-card-body{
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 12px 18px !important;
+  align-items: start;
+}
+
+/* Cada item que sea “fila” dentro de la celda */
+#kolrrhh-sueldo-items .kolrrhh-sueldo-item{
+  display: flex !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  padding: 10px 12px !important;
+  border-radius: 12px !important;
+  background: rgba(0,0,0,.03) !important;
+  border: 1px solid rgba(0,0,0,.06) !important;
+}
+
+/* Mobile: 1 columna */
+@media (max-width: 900px){
+  #kolrrhh-sueldo-items .kolrrhh-sueldo-card-body{
+    grid-template-columns: 1fr !important;
+  }
+}
+#kolrrhh-sueldo-items .kolrrhh-sueldo-item.is-wide{
+  grid-column: 1 / -1;
+}
+
+.kolrrhh-sueldo-card{
+  background:#fff;
+  border:1px solid rgba(0,0,0,.08);
+  border-radius:12px;
+  padding:16px;
+  margin-bottom:16px;
+}
+
+/* Cabecera */
+.kolrrhh-sueldo-header{
+  display:flex;
+  justify-content:space-between;
+  margin-bottom:12px;
+  font-size:14px;
+}
+
+/* Tabla */
+.kolrrhh-sueldo-table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:13px;
+}
+
+.kolrrhh-sueldo-table th,
+.kolrrhh-sueldo-table td{
+  padding:8px 6px;
+  border:1px solid rgba(0,0,0,.06);
+  text-align:right;
+}
+
+.kolrrhh-sueldo-table th{
+  background:#f6f7f8;
+  font-weight:700;
+  text-align:center;
+  white-space:nowrap;
+}
+
+.kolrrhh-sueldo-table td{
+  font-weight:600;
+  text-align: center;
+}
+
+.kolrrhh-sueldo-card{
+  background:#fff;
+  border:1px solid rgba(0,0,0,.08);
+  border-radius:12px;
+  padding:16px;
+  margin-bottom:16px;
+}
+
+/* Cabecera */
+.kolrrhh-sueldo-header{
+  display:flex;
+  justify-content:space-between;
+  margin-bottom:14px;
+  font-size:14px;
+}
+
+/* Secciones */
+.kolrrhh-sueldo-section{
+  margin-top:14px;
+}
+
+.kolrrhh-sueldo-section-title{
+  font-weight:800;
+  font-size:13px;
+  margin-bottom:6px;
+  opacity:.7;
+  text-transform:uppercase;
+}
+
+/* Tablas */
+.kolrrhh-sueldo-table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:13px;
+}
+
+.kolrrhh-sueldo-table th,
+.kolrrhh-sueldo-table td{
+  padding:8px 6px;
+  border:1px solid rgba(0,0,0,.06);
+  text-align:right;
+}
+
+.kolrrhh-sueldo-table th{
+  background:#f6f7f8;
+  font-weight:700;
+  text-align:center;
+  white-space:nowrap;
+}
+
+.kolrrhh-sueldo-table td{
+  font-weight:600;
+}
+
+/* Modal genérico simple */
+.kolrrhh-modal{ display:none; position:fixed; inset:0; z-index:9999; }
+.kolrrhh-modal.is-open{ display:block; }
+
+.kolrrhh-modal-backdrop{
+  position:absolute; inset:0;
+  background: rgba(0,0,0,.35);
+}
+
+.kolrrhh-modal-card{
+  position:relative;
+  width:min(720px, calc(100vw - 40px));
+  margin: 40px auto;
+  background:#fff;
+  border-radius:18px;
+  box-shadow: 0 25px 80px rgba(0,0,0,.25);
+  overflow:hidden;
+}
+
+.kolrrhh-modal-top{
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(0,0,0,.08);
+}
+
+.kolrrhh-modal-title{ font-weight:900; font-size:16px; }
+.kolrrhh-modal-x{
+  border:0; background:transparent; font-size:28px; line-height:1; cursor:pointer;
+  opacity:.6;
+}
+.kolrrhh-modal-x:hover{ opacity:1; }
+
+.kolrrhh-modal-body{ padding: 16px 18px; }
+.kolrrhh-modal-label{ display:block; font-weight:800; opacity:.75; margin-bottom:8px; }
+
+.kolrrhh-modal-input{
+  width:100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,.15);
+  font-size: 15px;
+}
+
+.kolrrhh-modal-actions{
+  display:flex; justify-content:flex-end; gap:12px;
+  padding: 14px 18px;
+  border-top: 1px solid rgba(0,0,0,.08);
+}
+
+.kolrrhh-btn{
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,.15);
+  background:#fff;
+  font-weight:800;
+  cursor:pointer;
+}
+.kolrrhh-btn-primary{
+  background:#111;
+  color:#fff;
+  border-color:#111;
+}
+.kolrrhh-btn:disabled{ opacity:.45; cursor:not-allowed; }
+
+
+
+/* === SUELDO modal / form === */
+.kolrrhh-modal-card-wide{ max-width: 760px; }
+.kolrrhh-form-grid{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
+@media (max-width: 720px){ .kolrrhh-form-grid{ grid-template-columns: 1fr; } }
+
+/* Form rows for sueldo modal */
+.kolrrhh-form-row{ display:grid; gap: 14px; margin-bottom: 14px; grid-template-columns: repeat(var(--cols, 2), minmax(0,1fr)); }
+.kolrrhh-form-row:last-child{ margin-bottom:0; }
+@media (max-width: 720px){ .kolrrhh-form-row{ grid-template-columns: 1fr !important; } }
+.kolrrhh-form-field{ display:flex; flex-direction:column; gap:6px; }
+.kolrrhh-form-error{ padding: 10px 12px; border-radius: 12px; background: rgba(255,0,0,.08); border: 1px solid rgba(255,0,0,.25); font-size: 13px; }
+
+/* === SUELDO UI === */
+.kolrrhh-sueldo-head{
+  display:flex; align-items:flex-end; justify-content:space-between;
+  gap:12px; margin: 0 0 14px 0;
+}
+.kolrrhh-sueldo-head-title{ font-weight:700; font-size:16px; }
+.kolrrhh-sueldo-head-sub{ font-size:12px; opacity:.85; margin-top:2px; }
+.kolrrhh-btn-small{ padding: 8px 10px; font-size: 12px; border-radius: 12px; }
+.kolrrhh-btn-secondary{
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
+}
+.kolrrhh-btn.is-loading{ opacity: .7; pointer-events:none; }
+
+
+
+/* === Sueldo: nueva cabecera (periodo + rol + editar) === */
+.kolrrhh-sueldo-card-headrow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  margin-bottom:14px;
+  flex-wrap:wrap;
+}
+
+.kolrrhh-period-badge{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.kolrrhh-datebox{
+  width:74px;
+  border:1px solid rgba(0,0,0,.10);
+  border-radius:12px;
+  overflow:hidden;
+  background:#fff;
+  text-align:center;
+}
+
+.kolrrhh-datebox-mon{
+  font-weight:900;
+  letter-spacing:.12em;
+  font-size:12px;
+  padding:8px 8px 6px;
+  background:#ff7a2f; /* KOL naranja */
+  color:#fff;
+}
+
+.kolrrhh-datebox-day{
+  font-size:28px;
+  font-weight:900;
+  padding:10px 8px 2px;
+  line-height:1;
+}
+
+.kolrrhh-datebox-year{
+  font-size:12px;
+  opacity:.65;
+  padding:0 8px 10px;
+  font-weight:800;
+}
+
+.kolrrhh-datebox-arrow{
+  font-size:22px;
+  font-weight:900;
+  opacity:.55;
+  padding:0 4px;
+}
+
+.kolrrhh-sueldo-role{
+  font-weight:900;
+  font-size:14px;
+  letter-spacing:.04em;
+  opacity:.85;
+}
+
+.kolrrhh-sueldo-actions{ margin-left:auto; }
+
+/* tabla detalles: un toque más compacta */
+.kolrrhh-sueldo-table-details th,
+.kolrrhh-sueldo-table-details td{
+  padding:8px 6px;
+  font-size:12.5px;
+}
+
+/* Center content in sueldo tables */
+.kolrrhh-sueldo-table th, .kolrrhh-sueldo-table td,
+.kolrrhh-sueldo-table-details th, .kolrrhh-sueldo-table-details td{
+  text-align:center;
+  vertical-align:middle;
+}
+
+
+/* Modal top: only close button */
+.kolrrhh-modal-top.is-only-close{ justify-content:flex-end; }
+.kolrrhh-modal-top.is-only-close .kolrrhh-modal-title{ display:none; }
+
+/* ===== Desempeño (tabla) ===== */
+#kolrrhh-desempeno { margin-top: 6px; }
+
+.kolrrhh-dgrid{
+  width:100%;
+  border-collapse:collapse;
+  font-size:13px;
+  background:#fff;
+  border:1px solid rgba(0,0,0,.08);
+  border-radius:12px;
+  overflow:hidden;
+}
+
+.kolrrhh-dgrid th,
+.kolrrhh-dgrid td{
+  padding:10px 10px;
+  border-bottom:1px solid rgba(0,0,0,.06);
+  vertical-align:top;
+}
+
+.kolrrhh-dgrid th{
+  background:#f6f7f8;
+  font-weight:900;
+  text-align:left;
+  white-space:nowrap;
+}
+
+.kolrrhh-td-des{ width: 140px; font-weight:900; }
+.kolrrhh-td-mes{ width: 160px; font-weight:900; }
+
+.kolrrhh-chip{
+  display:inline-block;
+  padding:4px 8px;
+  border-radius:999px;
+  border:1px solid rgba(0,0,0,.10);
+  background: rgba(255,122,47,.10); /* naranja suave */
+  font-weight:800;
+  font-size:12px;
+  margin: 2px 6px 2px 0;
+}
