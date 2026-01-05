@@ -19,6 +19,8 @@ final class KOL_RRHH_Plugin {
     add_action('wp_ajax_kol_rrhh_get_sueldo_items', [$this,'ajax_get_sueldo_items']);
     add_action('wp_ajax_kol_rrhh_save_sueldo_item', [$this,'ajax_save_sueldo_item']);
     add_action('wp_ajax_kol_rrhh_get_desempeno_items', [$this,'ajax_get_desempeno_items']);
+    add_action('wp_ajax_kol_rrhh_save_desempeno_item', [$this,'ajax_save_desempeno_item']);
+    add_action('wp_ajax_kol_rrhh_delete_desempeno_item', [$this,'ajax_delete_desempeno_item']);
 
 
     add_shortcode(self::SHORTCODE, [$this,'shortcode']);
@@ -377,7 +379,59 @@ final class KOL_RRHH_Plugin {
 </div>
 
 
-    <?php
+    
+<!-- Modal agregar desempeño -->
+<div id="kolrrhh-desempeno-modal" class="kolrrhh-modal" aria-hidden="true">
+  <div class="kolrrhh-modal-backdrop" data-close="1"></div>
+
+  <div class="kolrrhh-modal-card kolrrhh-modal-card-wide" role="dialog" aria-modal="true" aria-labelledby="kolrrhh-desempeno-title">
+    <div class="kolrrhh-modal-top is-only-close">
+      <button class="kolrrhh-modal-x" data-close="1" aria-label="Cerrar">×</button>
+    </div>
+
+    <div class="kolrrhh-modal-body">
+      <div id="kolrrhh-desempeno-error" class="kolrrhh-form-error" style="display:none;"></div>
+
+      <input type="hidden" id="kolrrhh-desempeno-legajo" value="" />
+
+      <div class="kolrrhh-form-row" style="--cols:2;">
+        <div class="kolrrhh-form-field">
+          <label class="kolrrhh-modal-label">Mes *</label>
+          <select id="kolrrhh-desempeno-mes" class="kolrrhh-modal-input"></select>
+        </div>
+        <div class="kolrrhh-form-field">
+          <label class="kolrrhh-modal-label">Desempeño (%) *</label>
+          <input id="kolrrhh-desempeno-porcentaje" type="number" step="0.01" min="0" max="100"
+                 class="kolrrhh-modal-input" placeholder="Ej: 10" />
+        </div>
+      </div>
+
+      <div class="kolrrhh-form-row" style="--cols:2;">
+        <div class="kolrrhh-form-field">
+          <label class="kolrrhh-modal-label">Fecha inasistencia</label>
+          <input id="kolrrhh-desempeno-fecha" type="date" class="kolrrhh-modal-input" />
+        </div>
+        <div class="kolrrhh-form-field" style="display:flex; align-items:flex-end; gap:10px;">
+          <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary" id="kolrrhh-desempeno-add-fecha">Agregar</button>
+          <div class="kolrrhh-muted" style="font-size:12px;">Podés agregar varias fechas.</div>
+        </div>
+      </div>
+
+      <div class="kolrrhh-form-field">
+        <label class="kolrrhh-modal-label">Inasistencias cargadas</label>
+        <div id="kolrrhh-desempeno-fechas-list" class="kolrrhh-chips"></div>
+      </div>
+    </div>
+
+    <div class="kolrrhh-modal-actions">
+      <button type="button" class="kolrrhh-btn" data-close="1">Cancelar</button>
+      <button type="button" class="kolrrhh-btn kolrrhh-btn-primary" id="kolrrhh-desempeno-save">Agregar desempeño</button>
+    </div>
+  </div>
+</div>
+
+
+<?php
     return ob_get_clean();
   }
 
@@ -455,13 +509,18 @@ public function ajax_get_desempeno_items(){
     wp_send_json_success(['rows' => []]);
   }
 
-  // Ajustá nombres de columnas si difieren:
-  $rows = $wpdb->get_results(
-    $wpdb->prepare(
-      "SELECT id, legajo, mes, desempeno, inasistencias
-       FROM {$table}
-       WHERE legajo = %d
-       ORDER BY mes DESC, id DESC",
+          // Ajustá nombres de columnas si difieren:
+          $rows = $wpdb->get_results(
+            $wpdb->prepare(
+              "SELECT 
+          id,
+          legajo,
+          DATE_FORMAT(mes, '%Y-%m-01') AS mes,
+          desempeno,
+          inasistencias
+        FROM {$table}
+        WHERE legajo = %d
+        ORDER BY mes DESC, id DESC",
       $legajo
     ),
     ARRAY_A
@@ -469,6 +528,132 @@ public function ajax_get_desempeno_items(){
 
   wp_send_json_success(['rows' => $rows ?: []]);
 }
+
+
+
+public function ajax_save_desempeno_item(){
+  if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
+    wp_send_json_error(['message' => 'Nonce inválido']);
+  }
+  if (!is_user_logged_in()) {
+    wp_send_json_error(['message' => 'No autorizado']);
+  }
+
+  $legajo = isset($_POST['legajo']) ? intval($_POST['legajo']) : 0;
+  $mes = isset($_POST['mes']) ? sanitize_text_field($_POST['mes']) : '';
+  $desempeno = isset($_POST['desempeno']) ? floatval(str_replace(',', '.', $_POST['desempeno'])) : null;
+  $inasistencias = isset($_POST['inasistencias']) ? wp_unslash($_POST['inasistencias']) : '';
+
+  if ($legajo <= 0) wp_send_json_error(['message' => 'Legajo inválido']);
+  if ($mes === '') wp_send_json_error(['message' => 'Mes requerido']);
+
+  // Normalizamos mes a formato YYYY-MM (y luego lo almacenamos como YYYY-MM-01)
+  if (preg_match('/^(\d{4})-(\d{2})/', $mes, $m)) {
+    $mes = $m[1] . '-' . $m[2];
+  } elseif (preg_match('/^(\d{2})\/(\d{4})$/', $mes, $m)) {
+    $mes = $m[2] . '-' . $m[1];
+  } else {
+    wp_send_json_error(['message' => 'Formato de mes inválido']);
+  }
+
+  // Para evitar que MySQL convierta a 0000-00-00 cuando la columna es DATE,
+  // guardamos el mes como el primer día del mes.
+  $mes_store = $mes . '-01';
+
+  // Inasistencias: se guarda como JSON array string
+  $arr = [];
+  if ($inasistencias !== '') {
+    $decoded = json_decode($inasistencias, true);
+    if (is_array($decoded)) {
+      $arr = $decoded;
+    } else {
+      // fallback: "dd/mm/yyyy,dd/mm/yyyy"
+      $arr = array_filter(array_map('trim', explode(',', (string)$inasistencias)));
+    }
+  }
+  $inasistencias_json = wp_json_encode(array_values($arr));
+
+  global $wpdb;
+  $table = $this->desempeno_table();
+
+  $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table));
+  if ($exists !== $table) {
+    wp_send_json_error(['message' => 'La tabla de desempeño no existe']);
+  }
+
+  // Si ya existe ese mes para ese legajo, lo actualizamos (evitamos duplicados)
+  // Compatibilidad: si hay registros viejos guardados como YYYY-MM, también los detectamos.
+  $existing_id = $wpdb->get_var($wpdb->prepare(
+    "SELECT id FROM {$table} WHERE legajo=%d AND (mes=%s OR mes=%s) LIMIT 1",
+    $legajo,
+    $mes,
+    $mes_store
+  ));
+
+  if ($existing_id) {
+    $ok = $wpdb->update(
+      $table,
+      [
+        'desempeno' => $desempeno,
+        'inasistencias' => $inasistencias_json
+      ],
+      ['id' => intval($existing_id)],
+      ['%f','%s'],
+      ['%d']
+    );
+    if ($ok === false) wp_send_json_error(['message' => 'No se pudo actualizar']);
+    wp_send_json_success(['id' => intval($existing_id), 'updated' => 1]);
+  }
+
+  $ok = $wpdb->insert(
+    $table,
+    [
+      'legajo' => $legajo,
+        'mes' => $mes_store,
+      'desempeno' => $desempeno,
+      'inasistencias' => $inasistencias_json
+    ],
+    ['%d','%s','%f','%s']
+  );
+
+  if (!$ok) {
+    wp_send_json_error(['message' => 'No se pudo insertar']);
+  }
+
+  wp_send_json_success(['id' => intval($wpdb->insert_id), 'created' => 1]);
+}
+
+public function ajax_delete_desempeno_item(){
+  if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
+    wp_send_json_error(['message' => 'Nonce inválido']);
+  }
+  if (!is_user_logged_in()) {
+    wp_send_json_error(['message' => 'No autorizado']);
+  }
+
+  $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+  if ($id <= 0) wp_send_json_error(['message' => 'ID inválido']);
+
+  global $wpdb;
+  $table = $this->desempeno_table();
+
+  $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table));
+  if ($exists !== $table) {
+    wp_send_json_error(['message' => 'La tabla de desempeño no existe']);
+  }
+
+  $ok = $wpdb->delete($table, ['id' => $id], ['%d']);
+  if ($ok === false) {
+    wp_send_json_error(['message' => 'No se pudo eliminar']);
+  }
+
+  wp_send_json_success(['deleted' => 1]);
+}
+
+
+
+
+
 
 
 

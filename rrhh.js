@@ -267,6 +267,7 @@
     let m = s.match(/^(\d{4})-(\d{2})(?:-\d{2})?$/);
     if (m) {
       const yy = m[1], mm = parseInt(m[2],10);
+      if (!yy || yy === '0000' || !(mm >= 1 && mm <= 12)) return '—';
       return `${months[mm-1] || m[2]} ${yy}`;
     }
 
@@ -298,48 +299,287 @@
     return s.split(',').map(x => x.trim()).filter(Boolean);
   }
 
-  function renderDesempenoTable(rows){
-    const host = document.getElementById('kolrrhh-desempeno-items');
-    if (!host) return;
+  
+function renderDesempenoTable(rows){
+  const host = document.getElementById('kolrrhh-desempeno-items');
+  if (!host) return;
 
-    if (!rows || rows.length === 0){
-      host.innerHTML = `<div class="kolrrhh-muted">Sin datos de desempeño para este legajo.</div>`;
-      return;
-    }
+  const legajoNum = Number(__CURRENT_LEGAJO__ || 0);
 
-    const trs = rows.map(r => {
-      const mes = formatMesLabel(r.mes);
-      const des = (r.desempeno === null || r.desempeno === undefined || r.desempeno === '')
-        ? '—'
-        : `${String(r.desempeno).replace('.', ',')}%`;
+  const head = `
+    <div class="kolrrhh-sueldo-head">
+      <div class="kolrrhh-sueldo-head-left">
+        <div class="kolrrhh-sueldo-head-sub">Legajo: <strong>${legajoNum || '—'}</strong></div>
+      </div>
+      <div class="kolrrhh-sueldo-head-right">
+        <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary" id="kolrrhh-desempeno-add">+ Agregar desempeño</button>
+      </div>
+    </div>
+  `;
 
-      const ina = parseInasistencias(r.inasistencias);
-      const inaHtml = (ina.length === 0)
-        ? '<span class="kolrrhh-muted">—</span>'
-        : ina.map(d => `<span class="kolrrhh-chip">${escapeHtml(String(d))}</span>`).join(' ');
+  if (!rows || rows.length === 0){
+    host.innerHTML = head + `<div class="kolrrhh-muted">Sin datos de desempeño para este legajo.</div>`;
+    return;
+  }
 
-      return `
-        <tr>
-          <td class="kolrrhh-td-mes">${escapeHtml(mes)}</td>
-          <td class="kolrrhh-td-des">${escapeHtml(des)}</td>
-          <td class="kolrrhh-td-ina">${inaHtml}</td>
-        </tr>
-      `;
-    }).join('');
+  const trs = rows.map(r => {
+    const mes = formatMesLabel(r.mes);
+    const des = (r.desempeno === null || r.desempeno === undefined || r.desempeno === '')
+      ? '—'
+      : `${String(r.desempeno).replace('.', ',')}%`;
 
-    host.innerHTML = `
-      <table class="kolrrhh-dgrid">
+    const inas = parseInasistencias(r.inasistencias);
+    const inasHtml = (inas.length
+      ? `<div class="kolrrhh-badgewrap">${inas.map(d => `<span class="kolrrhh-datebadge">${escapeHtml(String(d))}</span>`).join('')}</div>`
+      : '<span class="kolrrhh-muted">—</span>'
+    );
+
+    return `
+      <tr>
+        <td>${escapeHtml(mes)}</td>
+        <td style="white-space:nowrap;"><strong>${escapeHtml(des)}</strong></td>
+        <td>${inasHtml}</td>
+        <td style="white-space:nowrap;">
+          <button type="button" class="kolrrhh-btn kolrrhh-btn-danger kolrrhh-btn-xs" data-desempeno-del="1" data-id="${r.id}">Eliminar</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  host.innerHTML = head + `
+    <div class="kolrrhh-tablewrap">
+      <table class="kolrrhh-table">
         <thead>
           <tr>
             <th>Mes</th>
             <th>Desempeño</th>
             <th>Inasistencias</th>
+            <th>Acciones</th>
           </tr>
         </thead>
-        <tbody>${trs}</tbody>
+        <tbody>
+          ${trs}
+        </tbody>
       </table>
-    `;
+    </div>
+  `;
+}
+
+
+// ===============================
+// DESEMPEÑO: alta (sin editar UI) + eliminar
+// ===============================
+let __DESEMPENO_FECHAS__ = [];
+
+function showDesempenoError(msg){
+  const el = document.getElementById('kolrrhh-desempeno-error');
+  if (!el) return;
+  el.textContent = msg || 'Error';
+  el.style.display = 'block';
+}
+function clearDesempenoError(){
+  const el = document.getElementById('kolrrhh-desempeno-error');
+  if (!el) return;
+  el.textContent = '';
+  el.style.display = 'none';
+}
+
+function renderDesempenoFechasList(){
+  const host = document.getElementById('kolrrhh-desempeno-fechas-list');
+  if (!host) return;
+
+  if (!__DESEMPENO_FECHAS__ || __DESEMPENO_FECHAS__.length === 0){
+    host.innerHTML = `<div class="kolrrhh-muted">— Sin fechas —</div>`;
+    return;
   }
+
+  host.innerHTML = __DESEMPENO_FECHAS__.map(d => {
+    const safe = escapeHtml(String(d));
+    return `<span class="kolrrhh-chip"><span class="kolrrhh-chip-txt">${safe}</span><button type="button" class="kolrrhh-chip-x" data-chip-remove="1" data-val="${safe}" aria-label="Quitar">×</button></span>`;
+  }).join(' ');
+}
+
+function buildMesOptions(selectEl){
+  if (!selectEl) return;
+  const now = new Date();
+  const months = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+  let html = '';
+
+  // 18 meses hacia atrás + 6 hacia adelante
+  for (let offset = -18; offset <= 6; offset++){
+    const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    const yy = d.getFullYear();
+    const mm = months[d.getMonth()];
+    // Guardamos el mes como primer día (YYYY-MM-01) para que funcione bien si la columna `mes` es DATE.
+    const value = `${yy}-${mm}-01`;
+    html += `<option value="${value}">${escapeHtml(formatMesLabel(value))}</option>`;
+  }
+  selectEl.innerHTML = html;
+  // default: mes actual
+  const cur = `${now.getFullYear()}-${months[now.getMonth()]}-01`;
+  selectEl.value = cur;
+}
+
+function openDesempenoModal(legajo){
+  const modal = document.getElementById('kolrrhh-desempeno-modal');
+  if (!modal) return;
+
+  clearDesempenoError();
+
+  document.getElementById('kolrrhh-desempeno-legajo').value = String(legajo || '');
+  const sel = document.getElementById('kolrrhh-desempeno-mes');
+  buildMesOptions(sel);
+
+  document.getElementById('kolrrhh-desempeno-porcentaje').value = '';
+  document.getElementById('kolrrhh-desempeno-fecha').value = '';
+
+  __DESEMPENO_FECHAS__ = [];
+  renderDesempenoFechasList();
+
+  modal.classList.add('is-open');
+  modal.setAttribute('aria-hidden','false');
+
+  setTimeout(() => {
+    const f = document.getElementById('kolrrhh-desempeno-porcentaje');
+    if (f) f.focus();
+  }, 0);
+}
+
+function closeDesempenoModal(){
+  const modal = document.getElementById('kolrrhh-desempeno-modal');
+  if (!modal) return;
+
+  document.getElementById('kolrrhh-desempeno-legajo').value = '';
+  document.getElementById('kolrrhh-desempeno-porcentaje').value = '';
+  document.getElementById('kolrrhh-desempeno-fecha').value = '';
+  __DESEMPENO_FECHAS__ = [];
+  renderDesempenoFechasList();
+  clearDesempenoError();
+
+  modal.classList.remove('is-open');
+  modal.setAttribute('aria-hidden','true');
+}
+
+// delegación clicks: abrir modal / agregar fecha / quitar fecha / eliminar fila
+document.addEventListener('click', function(ev){
+  // Abrir modal
+  const add = ev.target.closest('#kolrrhh-desempeno-add');
+  if (add) {
+    ev.preventDefault();
+    const leg = Number(__CURRENT_LEGAJO__ || 0);
+    if (!leg) return;
+    openDesempenoModal(leg);
+    return;
+  }
+
+  // Agregar fecha
+  const addFecha = ev.target.closest('#kolrrhh-desempeno-add-fecha');
+  if (addFecha) {
+    ev.preventDefault();
+    clearDesempenoError();
+    const d = (document.getElementById('kolrrhh-desempeno-fecha')?.value || '').trim();
+    if (!d) { showDesempenoError('Elegí una fecha para agregar.'); return; }
+
+    // Normalizamos como YYYY-MM-DD (ya viene así del input date)
+    if (!__DESEMPENO_FECHAS__.includes(d)) __DESEMPENO_FECHAS__.push(d);
+    __DESEMPENO_FECHAS__.sort();
+    renderDesempenoFechasList();
+    return;
+  }
+
+  // Quitar fecha (chip)
+  const chipX = ev.target.closest('[data-chip-remove="1"]');
+  if (chipX) {
+    ev.preventDefault();
+    const val = chipX.getAttribute('data-val') || '';
+    __DESEMPENO_FECHAS__ = (__DESEMPENO_FECHAS__ || []).filter(x => String(x) !== String(val));
+    renderDesempenoFechasList();
+    return;
+  }
+
+  // Eliminar fila desempeño
+  const del = ev.target.closest('[data-desempeno-del="1"]');
+  if (del) {
+    ev.preventDefault();
+    const id = Number(del.getAttribute('data-id') || 0);
+    if (!id) return;
+    if (!confirm('¿Eliminar este registro de desempeño?')) return;
+
+    const leg = Number(__CURRENT_LEGAJO__ || 0);
+    if (!leg) return;
+
+    const payload = new URLSearchParams();
+    payload.set('action', 'kol_rrhh_delete_desempeno_item');
+    payload.set('nonce', KOL_RRHH.nonce);
+    payload.set('id', String(id));
+
+    fetch(KOL_RRHH.ajaxurl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+      body: payload.toString()
+    })
+    .then(r => r.json())
+    .then(json => {
+      if (!json || !json.success) {
+        alert(json?.data?.message || 'No se pudo eliminar.');
+        return;
+      }
+      loadDesempenoForLegajo(leg);
+    })
+    .catch(() => alert('Error de red/servidor al eliminar.'));
+    return;
+  }
+});
+
+// Guardar desempeño (AJAX)
+const desempenoSaveBtn = document.getElementById('kolrrhh-desempeno-save');
+if (desempenoSaveBtn) {
+  desempenoSaveBtn.addEventListener('click', async function(ev){
+    ev.preventDefault();
+    clearDesempenoError();
+
+    const legajo = Number(document.getElementById('kolrrhh-desempeno-legajo')?.value || 0);
+    const mes = (document.getElementById('kolrrhh-desempeno-mes')?.value || '').trim();
+    const porcentajeRaw = (document.getElementById('kolrrhh-desempeno-porcentaje')?.value || '').trim();
+
+    if (!legajo) { showDesempenoError('Falta legajo. Volvé a seleccionar el empleado.'); return; }
+    if (!mes) { showDesempenoError('Seleccioná un mes.'); return; }
+    if (porcentajeRaw === '') { showDesempenoError('Completá el porcentaje de desempeño.'); return; }
+
+    const pct = Number(String(porcentajeRaw).replace(',', '.'));
+    if (Number.isNaN(pct) || pct < 0 || pct > 100) { showDesempenoError('El porcentaje debe estar entre 0 y 100.'); return; }
+
+    const payload = new URLSearchParams();
+    payload.set('action', 'kol_rrhh_save_desempeno_item');
+    payload.set('nonce', KOL_RRHH.nonce);
+    payload.set('legajo', String(legajo));
+    payload.set('mes', mes);
+    payload.set('desempeno', String(pct));
+    payload.set('inasistencias', JSON.stringify(__DESEMPENO_FECHAS__ || []));
+
+    try{
+      const res = await fetch(KOL_RRHH.ajaxurl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+        body: payload.toString()
+      });
+      const json = await res.json();
+      if (!json || !json.success) {
+        showDesempenoError(json?.data?.message || 'No se pudo guardar.');
+        return;
+      }
+
+      closeDesempenoModal();
+      __CURRENT_LEGAJO__ = legajo;
+      loadDesempenoForLegajo(legajo);
+    }catch(err){
+      console.error(err);
+      showDesempenoError('Error de red/servidor al guardar.');
+    }
+  });
+}
+
+
 
   function dateBadgeParts(iso){
     // iso "YYYY-MM-DD" -> { day:"11", mon:"NOV", year:"2025" }
@@ -802,6 +1042,14 @@
       if (sueldoClose) {
         ev.preventDefault();
         closeSueldoModal();
+        return;
+      }
+
+
+      const desClose = ev.target.closest('#kolrrhh-desempeno-modal [data-close="1"]');
+      if (desClose) {
+        ev.preventDefault();
+        closeDesempenoModal();
         return;
       }
 

@@ -767,43 +767,79 @@
 .kolrrhh-modal-top.is-only-close{ justify-content:flex-end; }
 .kolrrhh-modal-top.is-only-close .kolrrhh-modal-title{ display:none; }
 
-/* ===== Desempeño (tabla) ===== */
-#kolrrhh-desempeno { margin-top: 6px; }
 
-.kolrrhh-dgrid{
-  width:100%;
-  border-collapse:collapse;
-  font-size:13px;
-  background:#fff;
-  border:1px solid rgba(0,0,0,.08);
-  border-radius:12px;
-  overflow:hidden;
-}
+/* ===== Desempeño grid ===== */
+.kolrrhh-tabpane { display:none; }
+.kolrrhh-tabpane.is-active { display:block; }
 
-.kolrrhh-dgrid th,
-.kolrrhh-dgrid td{
-  padding:10px 10px;
-  border-bottom:1px solid rgba(0,0,0,.06);
-  vertical-align:top;
-}
+.kolrrhh-grid { width:100%; border-collapse:collapse; }
+.kolrrhh-grid th, .kolrrhh-grid td { padding:10px 12px; border-top:1px solid rgba(0,0,0,.06); vertical-align:middle; }
+.kolrrhh-grid thead th { background:#f6f7f8; font-weight:700; color:#4a4a4a; border-top:none; }
+.kolrrhh-grid td.c, .kolrrhh-grid th.c { text-align:center; }
+.kolrrhh-grid .kolrrhh-in { width:100%; }
+.kolrrhh-grid .kolrrhh-month { min-width:150px; }
+.kolrrhh-grid .kolrrhh-num { max-width:140px; margin:0 auto; text-align:center; }
 
-.kolrrhh-dgrid th{
-  background:#f6f7f8;
-  font-weight:900;
-  text-align:left;
-  white-space:nowrap;
-}
+#kolrrhh-desempeno .kolrrhh-hint { margin-top:10px; font-size:12px; color:#6b6f76; }
+#kolrrhh-desempeno code { background:#fff; border:1px solid rgba(0,0,0,.08); padding:2px 6px; border-radius:8px; }
 
-.kolrrhh-td-des{ width: 140px; font-weight:900; }
-.kolrrhh-td-mes{ width: 160px; font-weight:900; }
+/* ===== Ajustes pedidos ===== */
+.kolrrhh-sueldo-card { border:1px solid rgba(0,0,0,.08); border-radius:16px; }
+.kolrrhh-sueldo-table th, .kolrrhh-sueldo-table td { text-align:center; }
 
-.kolrrhh-chip{
-  display:inline-block;
-  padding:4px 8px;
+/* Naranja KOL en el calendario */
+.kolrrhh-period-chip .top { background:#ff7a2f; }
+
+
+/* === Desempeño: tabla + acciones + chips === */
+.kolrrhh-tablewrap{overflow:auto; border:1px solid rgba(255,255,255,.08); border-radius:14px;}
+.kolrrhh-table{width:100%; border-collapse:collapse; font-size:13px;}
+.kolrrhh-table th,.kolrrhh-table td{padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.08); vertical-align:top;text-align: center;}
+.kolrrhh-table thead th{font-size:12px; letter-spacing:.04em; text-transform:uppercase; color:rgba(233,236,255,.75);text-align: center;}
+.kolrrhh-table thead th{color:rgba(63, 63, 65, 0.95);} /* más oscuro/visible */
+
+/* Inasistencias: badges compactos y en grilla */
+.kolrrhh-badgewrap{display:flex; flex-wrap:wrap; gap:10px;}
+.kolrrhh-datebadge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:8px 12px;
   border-radius:999px;
   border:1px solid rgba(0,0,0,.10);
-  background: rgba(255,122,47,.10); /* naranja suave */
-  font-weight:800;
+  background:rgba(0,0,0,.03);
+  color:rgba(0,0,0,.70);
   font-size:12px;
-  margin: 2px 6px 2px 0;
+  font-weight:700;
+  line-height:1;
+  flex:0 0 calc(55% - 10px); /* 2 por fila */
+  max-width:calc(55% - 10px);
+}
+.kolrrhh-table tbody tr:hover{background:rgba(255,255,255,.03);}
+
+.kolrrhh-btn-danger{border-color:rgba(200,60,60,.55); color:rgba(200,60,60,.95); background:rgba(200,60,60,.06);}
+.kolrrhh-btn-danger:hover{background:rgba(200,60,60,.10);}
+.kolrrhh-btn-xs{padding:6px 10px; font-size:12px; border-radius:12px;}
+
+.kolrrhh-chips{display:flex; flex-wrap:wrap; gap:8px;}
+.kolrrhh-chip{display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px;
+  background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.10);}
+.kolrrhh-chip-txt{font-size:12px; color:rgba(49, 49, 49, 0.9);}
+.kolrrhh-chip-x{cursor:pointer; border:none; background:transparent; color:rgba(49, 49, 49, 0.9); font-size:16px; line-height:1; padding:0;}
+.kolrrhh-chip-x:hover{color:#fff;}
+
+.kolrrhh-dgrid {
+  width: 100%;
+  max-width: 1100px; /* ajustá si querés más o menos ancho */
+}
+/* Zebra rows desempeño */
+.kolrrhh-dgrid tbody tr:nth-child(odd) {
+  background-color: #fafafa;
+}
+
+.kolrrhh-dgrid tbody tr:nth-child(even) {
+  background-color: #f2f2f2;
+}
+.kolrrhh-dgrid tbody tr:hover {
+  background-color: #e9e9e9;
 }
