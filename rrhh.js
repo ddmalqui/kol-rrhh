@@ -4,6 +4,19 @@
   let __LAST_SUELDO_ROWS__ = [];
   let __CURRENT_LEGAJO__ = 0;
 
+  const KOL_RRHH_AREAS = [
+  'Local 55','Local 15','Local 34','Sh','Urb','Osi','Sol',
+  'Deposito','Administracion','Redes','Entrenamiento'
+];
+
+const KOL_RRHH_ROLES = [
+  'Auxiliar','Vendedor','Responsable vendedor','Responsable Global',
+  'Responsable del local','Administracion','Tecnico','Redes',
+  'Recursos Humanos','Entrenamiento','Responsable compras',
+  'Responsable pedidos','Responsable stock'
+];
+
+
   function qs(id) { return document.getElementById(id); }
 
   function setVal(id, v){
@@ -16,6 +29,45 @@
     const el = qs(id);
     return el ? String(el.value || '').trim() : '';
   }
+
+  function validarPeriodoSueldo(fechaInicio, fechaFin) {
+  if (!fechaInicio || !fechaFin) {
+    return 'Completá la fecha de inicio y fin.';
+  }
+
+  const ini = new Date(fechaInicio + 'T00:00:00');
+  const fin = new Date(fechaFin + 'T00:00:00');
+
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+
+  // 1️⃣ inicio no puede ser mayor que fin
+  if (ini > fin) {
+    return 'La fecha de inicio no puede ser mayor que la fecha de fin.';
+  }
+
+  // 2️⃣ mismo mes y mismo año
+  if (
+    ini.getMonth() !== fin.getMonth() ||
+    ini.getFullYear() !== fin.getFullYear()
+  ) {
+    return 'El período debe pertenecer al mismo mes.';
+  }
+
+  // 3️⃣ no fechas futuras
+  if (ini > hoy || fin > hoy) {
+    return 'No se pueden cargar fechas posteriores a hoy.';
+  }
+
+  // 4️⃣ no más de 3 meses atrás
+  const limite = new Date(hoy.getFullYear(), hoy.getMonth() - 3, 1);
+  if (ini < limite) {
+    return 'El período no puede ser anterior a 3 meses.';
+  }
+
+  return ''; // OK
+}
+
 
   function showSueldoError(msg){
     const box = qs('kolrrhh-sueldo-error');
@@ -137,6 +189,8 @@
       ciudad: e.ciudad ?? e.Ciudad ?? '',
       fecha_nacimiento: e.fecha_nacimiento ?? e.fechaNacimiento ?? e.nacimiento ?? e.Nacimiento ?? '',
       categoria: e.categoria ?? e.Categoria ?? '',
+      clover_employee_id: e.clover_employee_id ?? e.cloverEmployeeId ?? '',
+
     };
   }
 
@@ -180,6 +234,7 @@
         ${field('Dirección', emp.direccion)}
         ${field('Ciudad', emp.ciudad)}
         ${field('Nacimiento', emp.fecha_nacimiento)}
+        ${field('Clover ID', emp.clover_employee_id || '')}
       </div>
     `;
   }
@@ -679,7 +734,25 @@ if (desempenoSaveBtn) {
     // fields
     setVal('kolrrhh-sueldo-periodo-inicio', row?.periodo_inicio || '');
     setVal('kolrrhh-sueldo-periodo-fin', row?.periodo_fin || '');
-    setVal('kolrrhh-sueldo-rol', row?.rol || '');
+    const rolSel = qs('kolrrhh-sueldo-rol');
+const areaSel = qs('kolrrhh-sueldo-area');
+
+if (rolSel) {
+  rolSel.innerHTML = `<option value="">Seleccionar rol</option>` +
+    KOL_RRHH_ROLES.map(r =>
+      `<option value="${r}">${r}</option>`
+    ).join('');
+  rolSel.value = row?.rol || '';
+}
+
+if (areaSel) {
+  areaSel.innerHTML = `<option value="">Seleccionar área / local</option>` +
+    KOL_RRHH_AREAS.map(a =>
+      `<option value="${a}">${a}</option>`
+    ).join('');
+  areaSel.value = row?.area || '';
+}
+
     setVal('kolrrhh-sueldo-jornada', row?.jornada || '');
 
     setVal('kolrrhh-sueldo-transferencia', row?.transferencia ?? '');
@@ -691,6 +764,8 @@ if (desempenoSaveBtn) {
     setVal('kolrrhh-sueldo-vac-tomadas', row?.vac_tomadas ?? 0);
     setVal('kolrrhh-sueldo-feriados', row?.feriados ?? 0);
     setVal('kolrrhh-sueldo-vac-no-tomadas', row?.vac_no_tomadas ?? 0);
+    
+
 
     // money formatting (en blur ya se formatea)
     ['kolrrhh-sueldo-transferencia','kolrrhh-sueldo-creditos','kolrrhh-sueldo-bono','kolrrhh-sueldo-descuentos','kolrrhh-sueldo-liquidacion']
@@ -709,6 +784,42 @@ if (desempenoSaveBtn) {
     setTimeout(() => { const f = qs(focusId); if (f) f.focus(); }, 0);
   }
 
+  function validatePeriodo(inicio, fin){
+  if (!inicio || !fin) return 'Completá fecha inicio y fin.';
+
+  const dIni = new Date(inicio + 'T00:00:00');
+  const dFin = new Date(fin + 'T00:00:00');
+  const hoy  = new Date();
+  hoy.setHours(0,0,0,0);
+
+  // orden
+  if (dIni > dFin) {
+    return 'La fecha de inicio no puede ser mayor a la fecha de fin.';
+  }
+
+  // mismo mes y año
+  if (
+    dIni.getMonth() !== dFin.getMonth() ||
+    dIni.getFullYear() !== dFin.getFullYear()
+  ) {
+    return 'El período debe pertenecer al mismo mes.';
+  }
+
+  // no fechas futuras
+  if (dIni > hoy || dFin > hoy) {
+    return 'No se pueden cargar fechas posteriores a hoy.';
+  }
+
+  // máximo 3 meses atrás
+  const limite = new Date(hoy.getFullYear(), hoy.getMonth() - 3, 1);
+  if (dIni < limite) {
+    return 'El período no puede ser anterior a 3 meses.';
+  }
+
+  return '';
+}
+
+
   function closeSueldoModal(){
     const modal = qs('kolrrhh-sueldo-modal');
     if(!modal) return;
@@ -716,6 +827,9 @@ if (desempenoSaveBtn) {
     // reset
     setVal('kolrrhh-sueldo-id', '0');
     setVal('kolrrhh-sueldo-legajo', '');
+    setVal('kolrrhh-sueldo-area', '');
+
+
     ['kolrrhh-sueldo-periodo-inicio','kolrrhh-sueldo-periodo-fin','kolrrhh-sueldo-rol','kolrrhh-sueldo-jornada',
      'kolrrhh-sueldo-transferencia','kolrrhh-sueldo-creditos','kolrrhh-sueldo-bono','kolrrhh-sueldo-descuentos','kolrrhh-sueldo-liquidacion',
      'kolrrhh-sueldo-vac-tomadas','kolrrhh-sueldo-feriados','kolrrhh-sueldo-vac-no-tomadas'
@@ -754,6 +868,7 @@ if (desempenoSaveBtn) {
       const a = dateBadgeParts(r.periodo_inicio);
       const b = dateBadgeParts(r.periodo_fin);
       const rol = (r.rol || '—').toString().toUpperCase();
+      const area = r.area ? r.area : '—';
 
       return `
         <div class="kolrrhh-sueldo-card" data-sueldo-id="${r.id}">
@@ -772,7 +887,11 @@ if (desempenoSaveBtn) {
               </div>
             </div>
 
-            <div class="kolrrhh-sueldo-role">${escapeHtml(rol)}</div>
+        <div class="kolrrhh-sueldo-role">
+  <div class="kolrrhh-sueldo-area">${escapeHtml(area)}</div>
+  <div class="kolrrhh-sueldo-cargo">${escapeHtml(rol)}</div>
+</div>
+
 
             <div class="kolrrhh-sueldo-actions">
               <button type="button" class="kolrrhh-btn kolrrhh-btn-small" data-sueldo-edit="1" data-id="${r.id}">Editar</button>
@@ -848,6 +967,8 @@ if (desempenoSaveBtn) {
     const fCiu = qs('kolrrhh-modal-ciudad');          // ahora debería ser <select>
     const fNac = qs('kolrrhh-modal-fecha_nacimiento');// ahora debería ser <input type="date">
     const fEstado = qs('kolrrhh-modal-estado');       // select
+    const fClover = qs('kolrrhh-modal-clover_employee_id');
+
 
     if (!modal || !title || !idEl || !legEl || !fNombre) return;
 
@@ -878,6 +999,8 @@ if (desempenoSaveBtn) {
       }
 
       if (fEstado) fEstado.value = (emp.estado ?? 'ACTIVO');
+      if (fClover) fClover.value = emp.clover_employee_id ?? '';
+
     } else {
       legajoNum = getMaxLegajoFromDom() + 1;
       idEl.value = '';
@@ -891,6 +1014,8 @@ if (desempenoSaveBtn) {
       if (fCiu) fCiu.value = '';
       if (fNac) fNac.value = '';
       if (fEstado) fEstado.value = 'ACTIVO';
+      if (fClover) fClover.value = '';
+
     }
 
     const legStr = formatLegajo4(legajoNum);
@@ -1144,6 +1269,10 @@ if (desempenoSaveBtn) {
           body.set('ciudad', ciudad);
           body.set('fecha_nacimiento', fecha_nacimiento);
           body.set('estado', estado);
+          let clover_employee_id = (qs('kolrrhh-modal-clover_employee_id')?.value || '').trim();
+clover_employee_id = clover_employee_id.replace(/\s*,\s*/g, ','); // opcional, mismo criterio que en PHP
+
+body.set('clover_employee_id', clover_employee_id);
 
           const res = await fetch(KOL_RRHH.ajaxurl, {
             method: 'POST',
@@ -1243,6 +1372,13 @@ if (desempenoSaveBtn) {
         const periodo_inicio = getVal('kolrrhh-sueldo-periodo-inicio');
         const periodo_fin = getVal('kolrrhh-sueldo-periodo-fin');
 
+        const errorPeriodo = validarPeriodoSueldo(periodo_inicio, periodo_fin);
+        if (errorPeriodo) {
+          showSueldoError(errorPeriodo);
+          return;
+        }
+
+
         if (!legajo) { showSueldoError('Falta legajo. Volvé a seleccionar el empleado.'); return; }
         if (!periodo_inicio || !periodo_fin) { showSueldoError('Periodo inicio y fin son obligatorios.'); return; }
         if (new Date(periodo_inicio) > new Date(periodo_fin)) { showSueldoError('El periodo inicio no puede ser mayor al fin.'); return; }
@@ -1256,6 +1392,7 @@ if (desempenoSaveBtn) {
         payload.set('periodo_inicio', periodo_inicio);
         payload.set('periodo_fin', periodo_fin);
         payload.set('rol', getVal('kolrrhh-sueldo-rol'));
+        payload.set('area', getVal('kolrrhh-sueldo-area'));
         payload.set('jornada', getVal('kolrrhh-sueldo-jornada'));
 
         payload.set('transferencia', getVal('kolrrhh-sueldo-transferencia'));

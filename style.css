@@ -340,7 +340,7 @@
 
 .kolrrhh-modal-card{
   position: relative;
-  width: min(760px, calc(100vw - 28px));
+  width: min(850px, calc(100vw - 28px));
   margin: 9vh auto 0;
   border-radius: 22px;
   background: #fff;
@@ -377,7 +377,7 @@
 
 .kolrrhh-modal-input{
   width: 100%;
-  padding: 12px 12px;
+  padding: 8px 12px;
   border-radius: 14px;
   border: 1px solid rgba(0,0,0,.10);
   outline: none;
@@ -601,7 +601,7 @@
 
 .kolrrhh-modal-card{
   position:relative;
-  width:min(720px, calc(100vw - 40px));
+  width:min(850px, calc(100vw - 40px));
   margin: 40px auto;
   background:#fff;
   border-radius:18px;
@@ -627,7 +627,7 @@
 
 .kolrrhh-modal-input{
   width:100%;
-  padding: 12px 14px;
+  padding: 8px 14px;
   border-radius: 12px;
   border: 1px solid rgba(0,0,0,.15);
   font-size: 15px;
@@ -657,7 +657,7 @@
 
 
 /* === SUELDO modal / form === */
-.kolrrhh-modal-card-wide{ max-width: 760px; }
+.kolrrhh-modal-card-wide{ max-width: 850px; }
 .kolrrhh-form-grid{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
 @media (max-width: 720px){ .kolrrhh-form-grid{ grid-template-columns: 1fr; } }
 
@@ -684,14 +684,12 @@
 
 
 
-/* === Sueldo: nueva cabecera (periodo + rol + editar) === */
 .kolrrhh-sueldo-card-headrow{
-  display:flex;
+  display:grid;
+  grid-template-columns: auto 1fr auto;
   align-items:center;
-  justify-content:space-between;
   gap:14px;
   margin-bottom:14px;
-  flex-wrap:wrap;
 }
 
 .kolrrhh-period-badge{
@@ -843,3 +841,32 @@
 .kolrrhh-dgrid tbody tr:hover {
   background-color: #e9e9e9;
 }
+.kolrrhh-sueldo-role{
+  text-align:center;
+}
+
+.kolrrhh-sueldo-area{
+  font-size: 12px;
+  font-weight: 900;
+  opacity: .70;
+  letter-spacing: .03em;
+}
+
+.kolrrhh-sueldo-cargo{
+  font-size: 14px;
+  font-weight: 950;
+  letter-spacing: .06em;
+}
+.kolrrhh-form-field select.kolrrhh-modal-input{
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #666 50%),
+    linear-gradient(135deg, #666 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 18px,
+    calc(100% - 12px) 18px;
+  background-size: 6px 6px;
+  background-repeat: no-repeat;
+}
+
+

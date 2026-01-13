@@ -280,6 +280,19 @@ final class KOL_RRHH_Plugin {
     </div>
   </div>
 
+<div class="kolrrhh-field">
+  <div class="kolrrhh-k">Clover ID</div>
+  <div class="kolrrhh-v">
+    <input
+      type="text"
+      id="kolrrhh-modal-clover_employee_id"
+      class="kolrrhh-modal-input"
+      maxlength="255"
+      placeholder="Ej: 3489489383,9448435,88238843"
+      autocomplete="off"
+    />
+  </div>
+</div>
 </div>
 
 
@@ -300,9 +313,6 @@ final class KOL_RRHH_Plugin {
   <div class="kolrrhh-modal-backdrop" data-close="1"></div>
 
   <div class="kolrrhh-modal-card kolrrhh-modal-card-wide">
-    <div class="kolrrhh-modal-top is-only-close">
-      <button class="kolrrhh-modal-x" data-close="1" aria-label="Cerrar">×</button>
-    </div>
 
     <div class="kolrrhh-modal-body">
       <div id="kolrrhh-sueldo-error" class="kolrrhh-form-error" style="display:none;"></div>
@@ -310,7 +320,7 @@ final class KOL_RRHH_Plugin {
       <input type="hidden" id="kolrrhh-sueldo-id" value="0" />
       <input type="hidden" id="kolrrhh-sueldo-legajo" value="" />
 
-            <div class="kolrrhh-form-row" style="--cols:3;">
+<div class="kolrrhh-form-row" style="--cols:4;">
         <div class="kolrrhh-form-field">
           <label class="kolrrhh-modal-label">Fecha inicio *</label>
           <input id="kolrrhh-sueldo-periodo-inicio" type="date" class="kolrrhh-modal-input" />
@@ -319,10 +329,15 @@ final class KOL_RRHH_Plugin {
           <label class="kolrrhh-modal-label">Fecha fin *</label>
           <input id="kolrrhh-sueldo-periodo-fin" type="date" class="kolrrhh-modal-input" />
         </div>
-        <div class="kolrrhh-form-field">
-          <label class="kolrrhh-modal-label">Rol</label>
-          <input id="kolrrhh-sueldo-rol" type="text" class="kolrrhh-modal-input" maxlength="120" />
-        </div>
+         <div class="kolrrhh-form-field">
+  <label class="kolrrhh-modal-label">Área / Local</label>
+  <select id="kolrrhh-sueldo-area" class="kolrrhh-modal-input"></select>
+</div>
+
+<div class="kolrrhh-form-field">
+  <label class="kolrrhh-modal-label">Rol</label>
+  <select id="kolrrhh-sueldo-rol" class="kolrrhh-modal-input"></select>
+</div>
       </div>
 
       <div class="kolrrhh-form-row" style="--cols:2;">
@@ -385,10 +400,7 @@ final class KOL_RRHH_Plugin {
   <div class="kolrrhh-modal-backdrop" data-close="1"></div>
 
   <div class="kolrrhh-modal-card kolrrhh-modal-card-wide" role="dialog" aria-modal="true" aria-labelledby="kolrrhh-desempeno-title">
-    <div class="kolrrhh-modal-top is-only-close">
-      <button class="kolrrhh-modal-x" data-close="1" aria-label="Cerrar">×</button>
-    </div>
-
+  
     <div class="kolrrhh-modal-body">
       <div id="kolrrhh-desempeno-error" class="kolrrhh-form-error" style="display:none;"></div>
 
@@ -471,7 +483,7 @@ public function ajax_get_sueldo_items(){
 
   $rows = $wpdb->get_results(
     $wpdb->prepare(
-      "SELECT id, legajo, periodo_inicio, periodo_fin, rol,
+      "SELECT id, legajo, periodo_inicio, periodo_fin, area, rol,
               transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas
        FROM {$table}
        WHERE legajo = %d
@@ -665,6 +677,40 @@ public function ajax_save_sueldo_item(){
     wp_send_json_error(['message' => 'No autorizado']);
   }
 
+  $inicio = sanitize_text_field($_POST['periodo_inicio'] ?? '');
+$fin    = sanitize_text_field($_POST['periodo_fin'] ?? '');
+$rol    = sanitize_text_field($_POST['rol'] ?? '');
+$area   = sanitize_text_field($_POST['area'] ?? '');
+
+if (!$inicio || !$fin) {
+  wp_send_json_error(['message' => 'Faltan fechas del período.']);
+}
+
+$di = strtotime($inicio);
+$df = strtotime($fin);
+$hoy = strtotime(date('Y-m-d'));
+
+if ($di > $df) {
+  wp_send_json_error(['message' => 'Fecha inicio mayor a fecha fin.']);
+}
+
+if (date('Y-m', $di) !== date('Y-m', $df)) {
+  wp_send_json_error(['message' => 'El período debe ser del mismo mes.']);
+}
+
+if ($di > $hoy || $df > $hoy) {
+  wp_send_json_error(['message' => 'No se permiten fechas futuras.']);
+}
+
+$limite = strtotime(date('Y-m-01', strtotime('-3 months')));
+if ($di < $limite) {
+  wp_send_json_error(['message' => 'El período supera los 3 meses permitidos.']);
+}
+
+if (!$rol || !$area) {
+  wp_send_json_error(['message' => 'Rol y área son obligatorios.']);
+}
+
   $id     = isset($_POST['id']) ? intval($_POST['id']) : 0;
   $legajo = isset($_POST['legajo']) ? intval($_POST['legajo']) : 0;
 
@@ -683,6 +729,7 @@ public function ajax_save_sueldo_item(){
   }
 
   $rol      = isset($_POST['rol']) ? sanitize_text_field($_POST['rol']) : '';
+  $area = isset($_POST['area']) ? sanitize_text_field($_POST['area']) : '';
   $jornada  = isset($_POST['jornada']) ? sanitize_text_field($_POST['jornada']) : '';
 
   // Dinero: viene como string, convertimos a número (float)
@@ -717,6 +764,7 @@ public function ajax_save_sueldo_item(){
     'periodo_inicio' => $periodo_inicio,
     'periodo_fin' => $periodo_fin,
     'rol' => $rol,
+    'area' => $area,
     'transferencia' => $transferencia,
     'creditos' => $creditos,
     'jornada' => $jornada,
@@ -727,19 +775,18 @@ public function ajax_save_sueldo_item(){
     'liquidacion' => $liquidacion,
     'vac_no_tomadas' => $vac_no_tomadas
   ];
-
-  $formats = ['%d','%s','%s','%s','%f','%f','%s','%f','%f','%d','%d','%f','%d'];
+$formats = ['%d','%s','%s','%s','%s','%f','%f','%s','%f','%f','%d','%d','%f','%d'];
 
   if ($id > 0) {
     $ok = $wpdb->update($table, $data, ['id' => $id], $formats, ['%d']);
     if ($ok === false) wp_send_json_error(['message' => 'No se pudo actualizar']);
-    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, rol, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $id), ARRAY_A);
+    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, rol, area, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $id), ARRAY_A);
     wp_send_json_success(['row' => $row]);
   } else {
     $ok = $wpdb->insert($table, $data, $formats);
     if (!$ok) wp_send_json_error(['message' => 'No se pudo insertar']);
     $new_id = intval($wpdb->insert_id);
-    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, rol, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $new_id), ARRAY_A);
+    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, rol, area, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $new_id), ARRAY_A);
     wp_send_json_success(['row' => $row]);
   }
 }
@@ -774,6 +821,11 @@ $obra     = isset($_POST['obra_social']) ? sanitize_text_field($_POST['obra_soci
 $dir      = isset($_POST['direccion']) ? sanitize_text_field($_POST['direccion']) : '';
 $ciudad   = isset($_POST['ciudad']) ? sanitize_text_field($_POST['ciudad']) : '';
 $nac      = isset($_POST['fecha_nacimiento']) ? sanitize_text_field($_POST['fecha_nacimiento']) : '';
+$clover_employee_id = isset($_POST['clover_employee_id']) ? sanitize_text_field($_POST['clover_employee_id']) : '';
+$clover_employee_id = trim($clover_employee_id);
+
+// opcional (recomendado): normalizar espacios alrededor de comas
+$clover_employee_id = preg_replace('/\s*,\s*/', ',', $clover_employee_id);
 
   $id     = isset($_POST['id']) ? intval($_POST['id']) : 0;
 
@@ -795,9 +847,10 @@ $nac      = isset($_POST['fecha_nacimiento']) ? sanitize_text_field($_POST['fech
     'direccion' => $dir,
     'ciudad' => $ciudad,
     'fecha_nacimiento' => $nac,
+    'clover_employee_id' => $clover_employee_id,
   ],
   ['id' => $id],
-  ['%s','%s','%s','%s','%s','%s','%s','%s'],
+  ['%s','%s','%s','%s','%s','%s','%s','%s','%s'],
   ['%d']
 );
 
@@ -829,8 +882,9 @@ $nac      = isset($_POST['fecha_nacimiento']) ? sanitize_text_field($_POST['fech
     'direccion' => $dir,
     'ciudad' => $ciudad,
     'fecha_nacimiento' => $nac,
+    'clover_employee_id' => $clover_employee_id,
   ],
-  ['%s','%s','%s','%s','%s','%s','%s','%s','%s','%s']
+  ['%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s']
 );
 
 
@@ -872,6 +926,7 @@ $nac      = isset($_POST['fecha_nacimiento']) ? sanitize_text_field($_POST['fech
         'direccion' => (string)($e['direccion'] ?? ''),
         'ciudad' => (string)($e['ciudad'] ?? ''),
         'fecha_nacimiento' => (string)($e['fecha_nacimiento'] ?? ''),
+        'clover_employee_id' => (string)($e['clover_employee_id'] ?? ''),
       ];
 
       $html .= sprintf(
