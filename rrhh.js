@@ -279,7 +279,44 @@ const KOL_RRHH_ROLES = [
     }
   }
 
-  async function loadDesempenoForLegajo(legajoNum){
+  // =====================
+  // FICHAJE (Clover Shifts)
+  // =====================
+  let __FICHAJE_LOADED__ = false;
+
+  function loadFichaje(force = false){
+    if (__FICHAJE_LOADED__ && !force) return;
+
+    const box = document.getElementById('kolrrhh-fichaje');
+    if (!box) return;
+
+    box.innerHTML = '<div class="kolrrhh-muted">Cargando fichaje…</div>';
+
+    const fd = new FormData();
+    fd.append('action', 'kol_rrhh_get_fichaje_html');
+    fd.append('nonce', (window.KOL_RRHH && KOL_RRHH.nonce) ? KOL_RRHH.nonce : '');
+
+    fetch((window.KOL_RRHH && KOL_RRHH.ajaxurl) ? KOL_RRHH.ajaxurl : '/wp-admin/admin-ajax.php', {
+      method: 'POST',
+      credentials: 'same-origin',
+      body: fd
+    })
+    .then(r => r.json())
+    .then(json => {
+      if (!json || json.success !== true) {
+        const msg = (json && json.data && json.data.message) ? json.data.message : 'Error cargando fichaje.';
+        box.innerHTML = '<div class="kolrrhh-alert kolrrhh-alert-error">'+escapeHtml(msg)+'</div>';
+        return;
+      }
+      box.innerHTML = (json.data && json.data.html) ? json.data.html : '<div class="kolrrhh-muted">Sin contenido.</div>';
+      __FICHAJE_LOADED__ = true;
+    })
+    .catch(err => {
+      box.innerHTML = '<div class="kolrrhh-alert kolrrhh-alert-error">Error de red: '+escapeHtml(String(err))+'</div>';
+    });
+  }
+
+async function loadDesempenoForLegajo(legajoNum){
     const host = document.getElementById('kolrrhh-desempeno-items');
     if (host) host.textContent = 'Cargando desempeño...';
 
@@ -1081,7 +1118,7 @@ if (areaSel) {
   });
 
   document.addEventListener('DOMContentLoaded', function () {
-    // === Tabs (Items Sueldo / Desempeño / Pestaña 3) ===
+    // === Tabs (Items Sueldo / Desempeño / Fichaje) ===
     document.addEventListener('click', function(ev){
       const tab = ev.target.closest('.kolrrhh-tab');
       if (!tab) return;
@@ -1101,6 +1138,12 @@ if (areaSel) {
       if (key === 't2' && __CURRENT_LEGAJO__ > 0) {
         loadDesempenoForLegajo(__CURRENT_LEGAJO__);
       }
+
+      // ✅ Al entrar a Fichaje (t3), cargo contenido desde el plugin
+      if (key === 't3') {
+        loadFichaje();
+      }
+
     });
 
     const addBtn = qs('kolrrhh-add');

@@ -22,6 +22,8 @@ final class KOL_RRHH_Plugin {
     add_action('wp_ajax_kol_rrhh_save_desempeno_item', [$this,'ajax_save_desempeno_item']);
     add_action('wp_ajax_kol_rrhh_delete_desempeno_item', [$this,'ajax_delete_desempeno_item']);
 
+    add_action('wp_ajax_kol_rrhh_get_fichaje_html', [$this,'ajax_get_fichaje_html']);
+
 
     add_shortcode(self::SHORTCODE, [$this,'shortcode']);
   }
@@ -134,7 +136,7 @@ final class KOL_RRHH_Plugin {
             <div class="kolrrhh-tabs">
               <button type="button" class="kolrrhh-tab is-active" data-tab="t1">Items Sueldo</button>
               <button type="button" class="kolrrhh-tab" data-tab="t2">Desempeno</button>
-              <button type="button" class="kolrrhh-tab" data-tab="t3">Pestaña 3</button>
+              <button type="button" class="kolrrhh-tab" data-tab="t3">Fichaje</button>
             </div>
             <div class="kolrrhh-tabpanes">
               <div class="kolrrhh-tabpane is-active" data-pane="t1">
@@ -150,7 +152,7 @@ final class KOL_RRHH_Plugin {
                   </div>
               </div>
               <div class="kolrrhh-tabpane" data-pane="t3">
-                <div class="kolrrhh-muted">— Espacio reservado para contenido —</div>
+                <div id="kolrrhh-fichaje" class="kolrrhh-muted">Cargando fichaje…</div>
               </div>
             </div>
 
@@ -955,6 +957,343 @@ $clover_employee_id = preg_replace('/\s*,\s*/', ',', $clover_employee_id);
     }
     return $html;
   }
+  private function load_clover_secrets(){
+    // Soporta varios formatos de clover_secrets.php:
+    // 1) return ['client_id'=>..., 'client_secret'=>..., 'refresh_token'=>...]
+    // 2) define('CLOVER_CLIENT_ID', ...), etc.
+    // 3) $client_id = '...'; $client_secret='...'; $refresh_token='...';
+	    // rtrim con / y \\ (escape correcto)
+	    $cloverBase = rtrim(ABSPATH, '/\\') . '/clover/';
+    $path = $cloverBase . 'clover_secrets.php';
+    if (!file_exists($path)) {
+      return ['ok'=>false, 'message'=>"No existe clover_secrets.php en /clover/."];
+    }
+
+    $included = @include $path;
+
+    $cid = null; $csec = null; $rtok = null;
+
+    if (is_array($included)) {
+      // acepta snake_case y camelCase
+      $cid  = $included['client_id'] ?? ($included['clientId'] ?? null);
+      $csec = $included['client_secret'] ?? ($included['clientSecret'] ?? null);
+      $rtok = $included['refresh_token'] ?? ($included['refreshToken'] ?? null);
+    }
+
+    // Si el archivo no "returnea" un array, puede definir variables/constantes:
+    if (!$cid && defined('CLOVER_CLIENT_ID'))     $cid  = constant('CLOVER_CLIENT_ID');
+    if (!$csec && defined('CLOVER_CLIENT_SECRET')) $csec = constant('CLOVER_CLIENT_SECRET');
+    if (!$rtok && defined('CLOVER_REFRESH_TOKEN')) $rtok = constant('CLOVER_REFRESH_TOKEN');
+
+    // Variables en scope global (si el include las seteó)
+    if (!$cid && isset($GLOBALS['client_id'])) $cid = $GLOBALS['client_id'];
+    if (!$csec && isset($GLOBALS['client_secret'])) $csec = $GLOBALS['client_secret'];
+    if (!$rtok && isset($GLOBALS['refresh_token'])) $rtok = $GLOBALS['refresh_token'];
+
+    // También soporta $secrets = [...]
+    if ((!$cid || !$csec) && isset($GLOBALS['secrets']) && is_array($GLOBALS['secrets'])) {
+      $s = $GLOBALS['secrets'];
+      if (!$cid)  $cid  = $s['client_id'] ?? ($s['clientId'] ?? null);
+      if (!$csec) $csec = $s['client_secret'] ?? ($s['clientSecret'] ?? null);
+      if (!$rtok) $rtok = $s['refresh_token'] ?? ($s['refreshToken'] ?? null);
+    }
+
+    if (!$cid || !$csec) {
+      return ['ok'=>false, 'message'=>"Faltan credenciales en clover_secrets.php (client_id / client_secret)."];
+    }
+
+    return ['ok'=>true, 'client_id'=>$cid, 'client_secret'=>$csec, 'refresh_token'=>$rtok];
+  }
+
+  private function clover_http_json($url, $payload, $headers = []){
+    $ch = curl_init($url);
+    $h = array_merge(['Content-Type: application/json', 'Accept: application/json'], $headers);
+    curl_setopt_array($ch, [
+      CURLOPT_RETURNTRANSFER => true,
+      CURLOPT_POST => true,
+      CURLOPT_HTTPHEADER => $h,
+      CURLOPT_POSTFIELDS => wp_json_encode($payload),
+      CURLOPT_TIMEOUT => 30,
+    ]);
+    $resp = curl_exec($ch);
+    $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err  = curl_error($ch);
+    curl_close($ch);
+    return [$http, $resp, $err];
+  }
+
+  private function clover_http_get($url, $headers = []){
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+      CURLOPT_RETURNTRANSFER => true,
+      CURLOPT_HTTPGET => true,
+      CURLOPT_HTTPHEADER => $headers,
+      CURLOPT_TIMEOUT => 30,
+    ]);
+    $resp = curl_exec($ch);
+    $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err  = curl_error($ch);
+    curl_close($ch);
+    return [$http, $resp, $err];
+  }
+
+  private function ms_to_dt($ms){
+    if (!$ms) return null;
+    $sec = (int) floor(((int)$ms) / 1000);
+    $dt = new DateTime("@{$sec}");
+    $dt->setTimezone(new DateTimeZone('America/Argentina/Buenos_Aires'));
+    return $dt;
+  }
+
+  private function fmt_hm($dt){
+    return $dt ? $dt->format('H:i') : '';
+  }
+
+  private function fmt_day_key($dt){
+    return $dt ? $dt->format('Y-m-d') : '';
+  }
+
+  private function day_label_es($dt){
+    if (!$dt) return '';
+    $dias = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+    $idx = (int)$dt->format('w');
+    return $dias[$idx] . ' ' . $dt->format('d/m');
+  }
+
+  private function human_duration($sec){
+    $sec = max(0, (int)$sec);
+    $h = intdiv($sec, 3600);
+    $m = intdiv($sec % 3600, 60);
+    if ($h > 0) return sprintf('%dh %02dm', $h, $m);
+    return sprintf('%dm', $m);
+  }
+
+  public function ajax_get_fichaje_html(){
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
+      wp_send_json_error(['message' => 'Nonce inválido']);
+    }
+
+    // ⚠️ Por ahora fijo (como tu get_shifts_always.php)
+    $merchantId = 'DH84CJ0QBWFB1';
+    $employeeId = '1702STFCB7TC4';
+
+    $secrets = $this->load_clover_secrets();
+    if (empty($secrets['ok'])) {
+      wp_send_json_error(['message' => $secrets['message'] ?? 'Error leyendo clover_secrets.php']);
+    }
+
+    $clientId = $secrets['client_id'];
+$clientSecret = $secrets['client_secret'];
+
+// Tokens por merchant (como get_shifts_always.php)
+	$cloverBase = rtrim(ABSPATH, '/\\') . '/clover/';
+$tokensFile = $cloverBase . 'clover_tokens.json';
+if (!file_exists($tokensFile)) {
+  wp_send_json_error(['message' => 'No se encontró clover_tokens.json en /clover/.']);
+}
+
+$load_tokens_file = function($path) {
+  if (!file_exists($path)) return [];
+  $raw = file_get_contents($path);
+  $json = json_decode($raw, true);
+  return is_array($json) ? $json : [];
+};
+$save_tokens_file = function($path, $all) {
+  file_put_contents($path, json_encode($all, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES));
+};
+
+$get_access_token_for_merchant = function($merchantId) use ($clientId, $clientSecret, $tokensFile, $load_tokens_file, $save_tokens_file) {
+  $all = $load_tokens_file($tokensFile);
+  $tok = $all[$merchantId] ?? null;
+
+  if (!$tok || empty($tok['refresh_token'])) {
+    return [false, null, "No hay refresh_token guardado para el merchant {$merchantId}. Re-conectá ese merchant con el flujo OAuth para regenerarlo."];
+  }
+
+  $now = time();
+  $access = $tok['access_token'] ?? null;
+  $accessExp = (int)($tok['access_token_expiration'] ?? 0);
+
+  // Si no hay access o está por vencer -> refrescar
+  if (!$access || ($accessExp && $accessExp <= $now + 120)) {
+
+    $payload = [
+      'client_id' => $clientId,
+      'client_secret' => $clientSecret,
+      'refresh_token' => $tok['refresh_token']
+    ];
+
+    list($httpR, $respR, $errR) = $this->clover_http_json('https://api.la.clover.com/oauth/v2/refresh', $payload);
+    $dataR = json_decode($respR ?? '', true);
+
+    // Fallback: /oauth/v2/token
+    if (!($httpR >= 200 && $httpR < 300) || !is_array($dataR) || empty($dataR['access_token'])) {
+      $payload2 = [
+        'client_id' => $clientId,
+        'client_secret' => $clientSecret,
+        'refresh_token' => $tok['refresh_token'],
+        'grant_type' => 'refresh_token',
+      ];
+      list($httpR2, $respR2, $errR2) = $this->clover_http_json('https://api.la.clover.com/oauth/v2/token', $payload2);
+      $dataR2 = json_decode($respR2 ?? '', true);
+
+      if (!($httpR2 >= 200 && $httpR2 < 300) || !is_array($dataR2) || empty($dataR2['access_token'])) {
+        $msg = "Refresh token falló para merchant {$merchantId}. Probablemente rotó/expiró. Re-conectá el merchant.";
+        $debug = [
+          'try_refresh_http' => $httpR,
+          'try_refresh_resp' => $respR,
+          'try_token_http' => $httpR2,
+          'try_token_resp' => $respR2,
+        ];
+        return [false, null, $msg . " DEBUG=" . json_encode($debug)];
+      }
+      $dataR = $dataR2;
+    }
+
+    // Guardar tokens (y refresh_token rotado si viene)
+    $tok['access_token'] = $dataR['access_token'];
+    if (!empty($dataR['access_token_expiration'])) $tok['access_token_expiration'] = (int)$dataR['access_token_expiration'];
+    if (!empty($dataR['refresh_token'])) $tok['refresh_token'] = $dataR['refresh_token'];
+    if (!empty($dataR['refresh_token_expiration'])) $tok['refresh_token_expiration'] = (int)$dataR['refresh_token_expiration'];
+
+    $tok['updated_at'] = time();
+    $all[$merchantId] = $tok;
+    $save_tokens_file($tokensFile, $all);
+
+    $access = $tok['access_token'];
+  }
+
+  return [true, $access, null];
+};
+
+// 1) obtener access_token válido para el merchant
+list($okTok, $accessToken, $errTok) = $get_access_token_for_merchant($merchantId);
+if (!$okTok) {
+  wp_send_json_error(['message' => $errTok]);
+}
+
+
+    // 2) get shifts
+    $shiftsUrl = "https://api.la.clover.com/v3/merchants/{$merchantId}/employees/{$employeeId}/shifts";
+    list($httpS, $respS, $errS) = $this->clover_http_get($shiftsUrl, [
+      "Authorization: Bearer {$accessToken}",
+      "Accept: application/json"
+    ]);
+
+    $dataS = json_decode($respS ?? '', true);
+    if ($httpS < 200 || $httpS >= 300 || !is_array($dataS)) {
+      wp_send_json_error([
+        'message' => 'Shifts request failed',
+        'http' => $httpS,
+        'resp' => $respS,
+        'curl_err' => $errS
+      ]);
+    }
+
+    $elements = $dataS['elements'] ?? [];
+    $items = [];
+
+    foreach ($elements as $s) {
+      $inTime  = $s['inTime'] ?? null;
+      $outTime = $s['outTime'] ?? null;
+      if (!$inTime) continue;
+
+      $inDt  = $this->ms_to_dt($inTime);
+      $outDt = $outTime ? $this->ms_to_dt($outTime) : null;
+
+      $dayKey = $this->fmt_day_key($inDt);
+
+      $durSec = 0;
+      if ($inDt && $outDt) {
+        $durSec = max(0, $outDt->getTimestamp() - $inDt->getTimestamp());
+      }
+
+      $items[] = [
+        'day_key' => $dayKey,
+        'in_dt'   => $inDt,
+        'out_dt'  => $outDt,
+        'dur_sec' => $durSec,
+      ];
+    }
+
+    // group by day
+    $byDayMap = [];
+    foreach ($items as $it) {
+      $k = $it['day_key'] ?: 's/d';
+      if (!isset($byDayMap[$k])) {
+        $byDayMap[$k] = [
+          'day_key' => $k,
+          'day_label' => $it['in_dt'] ? $this->day_label_es($it['in_dt']) : $k,
+          'items' => [],
+          'total_sec' => 0,
+        ];
+      }
+      $byDayMap[$k]['items'][] = $it;
+      $byDayMap[$k]['total_sec'] += (int)$it['dur_sec'];
+    }
+
+    // sort days desc (latest first)
+    krsort($byDayMap);
+    $byDay = array_values($byDayMap);
+
+    ob_start(); ?>
+      <div class="kolrrhh-fichaje">
+        <div class="kolrrhh-fichaje-head">
+          <div>
+            <div class="pill">Merchant: <?php echo esc_html($merchantId); ?></div>
+            <div class="pill">Employee: <?php echo esc_html($employeeId); ?></div>
+          </div>
+          <div class="pill">Timezone: America/Argentina/Buenos_Aires</div>
+        </div>
+
+        <table class="kolrrhh-fichaje-table">
+          <thead>
+            <tr>
+              <th style="width:160px;">Día</th>
+              <th>Turnos</th>
+              <th style="width:140px;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php if (empty($byDay)): ?>
+              <tr><td colspan="3">No hay turnos con inTime/outTime.</td></tr>
+            <?php else: ?>
+              <?php foreach ($byDay as $day): ?>
+                <tr>
+                  <td class="day"><?php echo esc_html($day['day_label']); ?></td>
+                  <td>
+                    <?php
+                      usort($day['items'], function($a,$b){
+                        return $a['in_dt']->getTimestamp() <=> $b['in_dt']->getTimestamp();
+                      });
+                    ?>
+                    <?php foreach ($day['items'] as $it): ?>
+                      <div class="rowshift">
+                        <div>
+                          <div class="label">Inicio</div>
+                          <div class="time"><?php echo esc_html($this->fmt_hm($it['in_dt'])); ?></div>
+                        </div>
+                        <div class="arrow">→</div>
+                        <div>
+                          <div class="label">Fin</div>
+                          <div class="time"><?php echo $it['out_dt'] ? esc_html($this->fmt_hm($it['out_dt'])) : '—'; ?></div>
+                        </div>
+                      </div>
+                    <?php endforeach; ?>
+                  </td>
+                  <td class="total"><?php echo esc_html($this->human_duration($day['total_sec'])); ?></td>
+                </tr>
+              <?php endforeach; ?>
+            <?php endif; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php
+    $html = ob_get_clean();
+
+    wp_send_json_success(['html' => $html]);
+  }
+
 }
 
 new KOL_RRHH_Plugin();
