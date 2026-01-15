@@ -3,6 +3,8 @@
   // cache de items sueldo (para editar sin recargar)
   let __LAST_SUELDO_ROWS__ = [];
   let __CURRENT_LEGAJO__ = 0;
+  let __CURRENT_CLOVER_ID__ = '';
+
 
   const KOL_RRHH_AREAS = [
   'Local 55','Local 15','Local 34','Sh','Urb','Osi','Sol',
@@ -200,6 +202,9 @@ const KOL_RRHH_ROLES = [
 
     const emp = normalizeEmp(empRaw);
 
+    // Guardar Clover ID actual (para fichaje)
+    __CURRENT_CLOVER_ID__ = String(emp?.clover_employee_id || '').trim();
+
     if (!emp || (!emp.id && !emp.nombre && !emp.legajo)) {
       el.innerHTML = '<div style="padding:14px;opacity:.7">Seleccioná un empleado</div>';
       return;
@@ -344,10 +349,21 @@ const KOL_RRHH_ROLES = [
 
     host.innerHTML = '<div class="kolrrhh-muted">Cargando fichaje…</div>';
 
+    const leg = Number(__CURRENT_LEGAJO__ || 0);
+    if (!leg) {
+      host.innerHTML = '<div class="kolrrhh-alert kolrrhh-alert-error">Seleccioná un empleado primero.</div>';
+      return;
+    }
+    if (!__CURRENT_CLOVER_ID__) {
+      host.innerHTML = '<div class="kolrrhh-alert kolrrhh-alert-error">Este empleado no tiene Clover ID cargado. Editalo y completá Clover ID con el formato MerchantID;EmployeeID.</div>';
+      return;
+    }
+
     const fd = new FormData();
     fd.append('action', 'kol_rrhh_get_fichaje_html');
     fd.append('nonce', (window.KOL_RRHH && KOL_RRHH.nonce) ? KOL_RRHH.nonce : '');
     fd.append('month', m);
+    fd.append('legajo', String(leg));
 
     fetch((window.KOL_RRHH && KOL_RRHH.ajaxurl) ? KOL_RRHH.ajaxurl : '/wp-admin/admin-ajax.php', {
       method: 'POST',
@@ -1064,6 +1080,9 @@ if (areaSel) {
 
     const isEdit = mode === 'edit';
     const emp = normalizeEmp(empRaw);
+
+    // Guardar Clover ID actual (para fichaje)
+    __CURRENT_CLOVER_ID__ = String(emp?.clover_employee_id || '').trim();
 
     let legajoNum = 0;
 

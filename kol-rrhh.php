@@ -1087,11 +1087,36 @@ $clover_employee_id = preg_replace('/\s*,\s*/', ',', $clover_employee_id);
       wp_send_json_error(['message' => 'Nonce inválido']);
     }
 
-    // ⚠️ Por ahora fijo (como tu get_shifts_always.php)
-    $merchantId = 'DH84CJ0QBWFB1';
-    $employeeId = '1702STFCB7TC4';
+// Leer Clover ID del empleado seleccionado (formato: MerchantID;EmployeeID)
+$legajo = isset($_POST['legajo']) ? intval($_POST['legajo']) : 0;
+if ($legajo <= 0) {
+  wp_send_json_error(['message' => 'Seleccioná un empleado primero.']);
+}
 
-    
+global $wpdb;
+$empTable = $this->table_name();
+
+$cloverIdRaw = $wpdb->get_var($wpdb->prepare(
+  "SELECT clover_employee_id FROM {$empTable} WHERE CAST(legajo AS UNSIGNED) = %d OR legajo = %s LIMIT 1",
+  $legajo,
+  (string)$legajo
+));
+
+$cloverIdRaw = trim((string)$cloverIdRaw);
+if ($cloverIdRaw === '') {
+  wp_send_json_error(['message' => 'Este empleado no tiene Clover ID cargado. Editalo y completá Clover ID con el formato MerchantID;EmployeeID.']);
+}
+
+// Si viene con varios (separados por coma), tomamos el primero
+$firstPair = trim((string)(explode(',', $cloverIdRaw)[0] ?? ''));
+$parts = array_map('trim', explode(';', $firstPair));
+
+if (count($parts) !== 2 || $parts[0] === '' || $parts[1] === '') {
+  wp_send_json_error(['message' => 'Clover ID inválido. Formato esperado: MerchantID;EmployeeID (ej: DH84CJ0QBWFB1;1702STFCB7TC4).']);
+}
+
+$merchantId = $parts[0];
+$employeeId = $parts[1];
 
     // Mes seleccionado (formato esperado: YYYY-MM). Si viene vacío, usamos el mes actual.
     $month = isset($_POST['month']) ? sanitize_text_field($_POST['month']) : '';
