@@ -282,19 +282,72 @@ const KOL_RRHH_ROLES = [
   // =====================
   // FICHAJE (Clover Shifts)
   // =====================
-  let __FICHAJE_LOADED__ = false;
+  let __FICHAJE_INIT__ = false;
+  let __FICHAJE_LAST_MONTH__ = '';
 
-  function loadFichaje(force = false){
-    if (__FICHAJE_LOADED__ && !force) return;
+  function getFichajeMonthOptions(){
+    // Diciembre 2025 + todos los meses 2026
+    const opts = [];
+    opts.push({ value: '2025-12', label: 'Diciembre 2025' });
 
-    const box = document.getElementById('kolrrhh-fichaje');
-    if (!box) return;
+    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    for (let m = 1; m <= 12; m++){
+      const mm = String(m).padStart(2,'0');
+      opts.push({ value: `2026-${mm}`, label: `${meses[m-1]} 2026` });
+    }
+    return opts;
+  }
 
-    box.innerHTML = '<div class="kolrrhh-muted">Cargando fichaje…</div>';
+  function initFichajeUI(){
+    if (__FICHAJE_INIT__) return;
+
+    const sel = document.getElementById('kolrrhh-fichaje-month');
+    const btn = document.getElementById('kolrrhh-fichaje-load');
+    const host = document.getElementById('kolrrhh-fichaje-result');
+
+    if (!sel || !btn || !host) return;
+
+    // Cargar opciones
+    const options = getFichajeMonthOptions();
+    sel.innerHTML = '';
+    options.forEach(o => {
+      const opt = document.createElement('option');
+      opt.value = o.value;
+      opt.textContent = o.label;
+      sel.appendChild(opt);
+    });
+
+    // Default: mes actual si está en la lista; si no, primero.
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth()+1).padStart(2,'0');
+    const current = `${y}-${m}`;
+    const hasCurrent = options.some(o => o.value === current);
+    sel.value = hasCurrent ? current : options[0].value;
+
+    btn.addEventListener('click', function(){
+      loadFichajeForMonth(sel.value);
+    });
+
+    __FICHAJE_INIT__ = true;
+  }
+
+  function loadFichajeForMonth(month){
+    const host = document.getElementById('kolrrhh-fichaje-result');
+    if (!host) return;
+
+    const m = String(month || '').trim();
+    if (!m) {
+      host.innerHTML = '<div class="kolrrhh-alert kolrrhh-alert-error">Seleccioná un mes válido.</div>';
+      return;
+    }
+
+    host.innerHTML = '<div class="kolrrhh-muted">Cargando fichaje…</div>';
 
     const fd = new FormData();
     fd.append('action', 'kol_rrhh_get_fichaje_html');
     fd.append('nonce', (window.KOL_RRHH && KOL_RRHH.nonce) ? KOL_RRHH.nonce : '');
+    fd.append('month', m);
 
     fetch((window.KOL_RRHH && KOL_RRHH.ajaxurl) ? KOL_RRHH.ajaxurl : '/wp-admin/admin-ajax.php', {
       method: 'POST',
@@ -305,14 +358,14 @@ const KOL_RRHH_ROLES = [
     .then(json => {
       if (!json || json.success !== true) {
         const msg = (json && json.data && json.data.message) ? json.data.message : 'Error cargando fichaje.';
-        box.innerHTML = '<div class="kolrrhh-alert kolrrhh-alert-error">'+escapeHtml(msg)+'</div>';
+        host.innerHTML = '<div class="kolrrhh-alert kolrrhh-alert-error">'+escapeHtml(msg)+'</div>';
         return;
       }
-      box.innerHTML = (json.data && json.data.html) ? json.data.html : '<div class="kolrrhh-muted">Sin contenido.</div>';
-      __FICHAJE_LOADED__ = true;
+      host.innerHTML = (json.data && json.data.html) ? json.data.html : '<div class="kolrrhh-muted">Sin contenido.</div>';
+      __FICHAJE_LAST_MONTH__ = m;
     })
     .catch(err => {
-      box.innerHTML = '<div class="kolrrhh-alert kolrrhh-alert-error">Error de red: '+escapeHtml(String(err))+'</div>';
+      host.innerHTML = '<div class="kolrrhh-alert kolrrhh-alert-error">Error de red: '+escapeHtml(String(err))+'</div>';
     });
   }
 
@@ -1141,8 +1194,8 @@ if (areaSel) {
 
       // ✅ Al entrar a Fichaje (t3), cargo contenido desde el plugin
       if (key === 't3') {
-        loadFichaje();
-      }
+         initFichajeUI();
+       }
 
     });
 

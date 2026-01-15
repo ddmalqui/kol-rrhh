@@ -152,7 +152,21 @@ final class KOL_RRHH_Plugin {
                   </div>
               </div>
               <div class="kolrrhh-tabpane" data-pane="t3">
-                <div id="kolrrhh-fichaje" class="kolrrhh-muted">Cargando fichaje…</div>
+                <div class="kolrrhh-fichaje-ui">
+  <div class="kolrrhh-fichaje-controls">
+    <div class="kolrrhh-form-field" style="max-width: 260px;">
+      <label class="kolrrhh-modal-label" style="margin-bottom:6px;">Mes</label>
+      <select id="kolrrhh-fichaje-month" class="kolrrhh-modal-input"></select>
+    </div>
+
+    <div class="kolrrhh-form-field" style="max-width: 260px;">
+      <label class="kolrrhh-modal-label" style="margin-bottom:6px;">&nbsp;</label>
+      <button type="button" class="kolrrhh-btn kolrrhh-btn-primary" id="kolrrhh-fichaje-load">Visualizar fichados del mes</button>
+    </div>
+  </div>
+
+  <div id="kolrrhh-fichaje-result" class="kolrrhh-muted">Seleccioná un mes y presioná “Visualizar fichados del mes”.</div>
+</div>
               </div>
             </div>
 
@@ -1077,7 +1091,14 @@ $clover_employee_id = preg_replace('/\s*,\s*/', ',', $clover_employee_id);
     $merchantId = 'DH84CJ0QBWFB1';
     $employeeId = '1702STFCB7TC4';
 
-    $secrets = $this->load_clover_secrets();
+    
+
+    // Mes seleccionado (formato esperado: YYYY-MM). Si viene vacío, usamos el mes actual.
+    $month = isset($_POST['month']) ? sanitize_text_field($_POST['month']) : '';
+    if (!$month) {
+      $month = (new DateTime('now', new DateTimeZone('America/Argentina/Buenos_Aires')))->format('Y-m');
+    }
+$secrets = $this->load_clover_secrets();
     if (empty($secrets['ok'])) {
       wp_send_json_error(['message' => $secrets['message'] ?? 'Error leyendo clover_secrets.php']);
     }
@@ -1201,7 +1222,13 @@ if (!$okTok) {
       $inDt  = $this->ms_to_dt($inTime);
       $outDt = $outTime ? $this->ms_to_dt($outTime) : null;
 
-      $dayKey = $this->fmt_day_key($inDt);
+      
+
+      // Filtrar por mes seleccionado
+      if ($inDt && $inDt->format('Y-m') !== $month) {
+        continue;
+      }
+$dayKey = $this->fmt_day_key($inDt);
 
       $durSec = 0;
       if ($inDt && $outDt) {
@@ -1244,6 +1271,7 @@ if (!$okTok) {
             <div class="pill">Employee: <?php echo esc_html($employeeId); ?></div>
           </div>
           <div class="pill">Timezone: America/Argentina/Buenos_Aires</div>
+          <div class="pill">Mes: <?php echo esc_html($month); ?></div>
         </div>
 
         <table class="kolrrhh-fichaje-table">

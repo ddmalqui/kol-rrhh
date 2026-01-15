@@ -964,3 +964,18 @@
   color: rgba(0,0,0,.45);
   transform: translateY(6px);
 }
+
+/* Controles de selección de mes (Fichaje) */
+.kolrrhh-fichaje-controls{
+  display:flex;
+  gap:14px;
+  align-items:flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.kolrrhh-fichaje-controls .kolrrhh-modal-input{
+  min-height: 40px;
+}
+.kolrrhh-fichaje-controls .kolrrhh-btn{
+  min-height: 40px;
+}
