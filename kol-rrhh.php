@@ -9,7 +9,7 @@
 if (!defined('ABSPATH')) exit;
 
 final class KOL_RRHH_Plugin {
-  const VERSION = '1.0.2';
+  const VERSION = '1.0.3';
   const SHORTCODE = 'kol_rrhh';
 
   public function __construct(){
@@ -159,7 +159,13 @@ final class KOL_RRHH_Plugin {
       <select id="kolrrhh-fichaje-month" class="kolrrhh-modal-input"></select>
     </div>
 
-    <div class="kolrrhh-form-field" style="max-width: 260px;">
+    
+    <div class="kolrrhh-form-field kolrrhh-fichaje-merchant-wrap" style="max-width: 320px;">
+      <label class="kolrrhh-modal-label" style="margin-bottom:6px;">Comercio</label>
+      <select id="kolrrhh-fichaje-merchant" class="kolrrhh-modal-input"></select>
+      <div class="kolrrhh-muted" style="margin-top:6px; font-size:12px;">Si este empleado trabaja en más de un comercio, elegí cuál querés consultar.</div>
+    </div>
+<div class="kolrrhh-form-field" style="max-width: 260px;">
       <label class="kolrrhh-modal-label" style="margin-bottom:6px;">&nbsp;</label>
       <button type="button" class="kolrrhh-btn kolrrhh-btn-primary" id="kolrrhh-fichaje-load">Visualizar fichados del mes</button>
     </div>
@@ -1036,6 +1042,31 @@ $clover_employee_id = preg_replace('/\s*,\s*/', ',', $clover_employee_id);
     return [$http, $resp, $err];
   }
 
+  private function clover_http_form($url, $payload, $headers = []){
+  $ch = curl_init($url);
+
+  $h = array_merge([
+    'Content-Type: application/x-www-form-urlencoded',
+    'Accept: application/json'
+  ], $headers);
+
+  curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => $h,
+    CURLOPT_POSTFIELDS => http_build_query($payload, '', '&'),
+    CURLOPT_TIMEOUT => 30,
+  ]);
+
+  $resp = curl_exec($ch);
+  $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  $err  = curl_error($ch);
+  curl_close($ch);
+
+  return [$http, $resp, $err];
+}
+
+
   private function clover_http_get($url, $headers = []){
     $ch = curl_init($url);
     curl_setopt_array($ch, [
@@ -1107,16 +1138,43 @@ if ($cloverIdRaw === '') {
   wp_send_json_error(['message' => 'Este empleado no tiene Clover ID cargado. Editalo y completá Clover ID con el formato MerchantID;EmployeeID.']);
 }
 
-// Si viene con varios (separados por coma), tomamos el primero
-$firstPair = trim((string)(explode(',', $cloverIdRaw)[0] ?? ''));
-$parts = array_map('trim', explode(';', $firstPair));
-
-if (count($parts) !== 2 || $parts[0] === '' || $parts[1] === '') {
+// Clover puede venir con 1 o varios pares separados por coma: MerchantID;EmployeeID
+$pairsRaw = array_filter(array_map('trim', explode(',', $cloverIdRaw)));
+$pairs = [];
+foreach ($pairsRaw as $p){
+  $pp = array_map('trim', explode(';', $p));
+  if (count($pp) !== 2) continue;
+  if ($pp[0] === '' || $pp[1] === '') continue;
+  $pairs[] = ['merchant' => $pp[0], 'employee' => $pp[1]];
+}
+if (empty($pairs)){
   wp_send_json_error(['message' => 'Clover ID inválido. Formato esperado: MerchantID;EmployeeID (ej: DH84CJ0QBWFB1;1702STFCB7TC4).']);
 }
 
-$merchantId = $parts[0];
-$employeeId = $parts[1];
+// Merchant seleccionado (opcional)
+$requestedMerchant = isset($_POST['merchant_id']) ? sanitize_text_field($_POST['merchant_id']) : '';
+$merchantId = '';
+$employeeId = '';
+
+if ($requestedMerchant !== '') {
+  foreach ($pairs as $pair){
+    if ($pair['merchant'] === $requestedMerchant){
+      $merchantId = $pair['merchant'];
+      $employeeId = $pair['employee'];
+      break;
+    }
+  }
+  if ($merchantId === '' || $employeeId === ''){
+    wp_send_json_error(['message' => 'El comercio seleccionado no coincide con el Clover ID de este empleado. Revisá el campo Clover ID.']);
+  }
+} else {
+  if (count($pairs) > 1){
+    wp_send_json_error(['message' => 'Este empleado tiene más de un comercio. Seleccioná el Comercio antes de visualizar el fichaje.']);
+  }
+  $merchantId = $pairs[0]['merchant'];
+  $employeeId = $pairs[0]['employee'];
+}
+
 
     // Mes seleccionado (formato esperado: YYYY-MM). Si viene vacío, usamos el mes actual.
     $month = isset($_POST['month']) ? sanitize_text_field($_POST['month']) : '';
@@ -1129,7 +1187,20 @@ $secrets = $this->load_clover_secrets();
     }
 
     $clientId = $secrets['client_id'];
-$clientSecret = $secrets['client_secret'];
+    $clientSecret = $secrets['client_secret'];
+
+    // URL para “reconectar” un merchant (volver a iniciar OAuth) sin copiar/pegar.
+    // Lo usamos para mostrar un botón cuando falla el refresh_token.
+    $redirectUri = home_url('/clover/callback');
+    $build_reconnect_url = function($mid) use ($clientId, $redirectUri) {
+      $mid = trim((string)$mid);
+      if ($mid === '') return '';
+      return 'https://www.la.clover.com/oauth/v2/merchants/' . rawurlencode($mid)
+        . '?client_id=' . rawurlencode($clientId)
+        . '&redirect_uri=' . rawurlencode($redirectUri)
+        . '&response_type=code'
+        . '&state=' . rawurlencode($mid);
+    };
 
 // Tokens por merchant (como get_shifts_always.php)
 	$cloverBase = rtrim(ABSPATH, '/\\') . '/clover/';
@@ -1141,6 +1212,14 @@ if (!file_exists($tokensFile)) {
 $load_tokens_file = function($path) {
   if (!file_exists($path)) return [];
   $raw = file_get_contents($path);
+  if ($raw === false) return [];
+
+  // Soporta JSON con BOM, comentarios // o /* */, y comas colgantes
+  $raw = preg_replace('/^\xEF\xBB\xBF/', '', $raw); // BOM
+  $raw = preg_replace('!\/\*.*?\*\/!s', '', $raw);
+  $raw = preg_replace('/\/\/.*$/m', '', $raw);
+  $raw = preg_replace('/,\s*([\]}])/m', '$1', $raw);
+
   $json = json_decode($raw, true);
   return is_array($json) ? $json : [];
 };
@@ -1159,41 +1238,39 @@ $get_access_token_for_merchant = function($merchantId) use ($clientId, $clientSe
   $now = time();
   $access = $tok['access_token'] ?? null;
   $accessExp = (int)($tok['access_token_expiration'] ?? 0);
+  $refreshExp = (int)($tok['refresh_token_expiration'] ?? 0);
+
+  // Si el refresh token ya venció (Clover suele rotarlo o invalidarlo), hay que re-conectar ese merchant.
+  if ($refreshExp && $refreshExp <= $now + 60) {
+    return [false, null, "El refresh_token del merchant {$merchantId} está vencido o por vencer. Re-conectá ese merchant con el flujo OAuth para regenerarlo."];
+  }
 
   // Si no hay access o está por vencer -> refrescar
+  // IMPORTANTE: Clover OAuth espera x-www-form-urlencoded. Usamos /oauth/v2/token con grant_type=refresh_token.
   if (!$access || ($accessExp && $accessExp <= $now + 120)) {
 
     $payload = [
       'client_id' => $clientId,
       'client_secret' => $clientSecret,
-      'refresh_token' => $tok['refresh_token']
+      'refresh_token' => $tok['refresh_token'],
+      'grant_type' => 'refresh_token',
     ];
 
-    list($httpR, $respR, $errR) = $this->clover_http_json('https://api.la.clover.com/oauth/v2/refresh', $payload);
+    list($httpR, $respR, $errR) = $this->clover_http_json('https://api.la.clover.com/oauth/v2/token', $payload);
+    // Compat: algunos entornos aceptan JSON (y rechazan form). Si devuelve 415, reintentamos como x-www-form-urlencoded.
+    if ((int)$httpR === 415) {
+      list($httpR, $respR, $errR) = $this->clover_http_form('https://api.la.clover.com/oauth/v2/token', $payload);
+    }
     $dataR = json_decode($respR ?? '', true);
 
-    // Fallback: /oauth/v2/token
     if (!($httpR >= 200 && $httpR < 300) || !is_array($dataR) || empty($dataR['access_token'])) {
-      $payload2 = [
-        'client_id' => $clientId,
-        'client_secret' => $clientSecret,
-        'refresh_token' => $tok['refresh_token'],
-        'grant_type' => 'refresh_token',
+      $msg = "Refresh token falló para merchant {$merchantId}. Probablemente rotó/expiró. Re-conectá el merchant.";
+      $debug = [
+        'try_token_http' => $httpR,
+        'try_token_resp' => $respR,
+        'curl_err' => $errR,
       ];
-      list($httpR2, $respR2, $errR2) = $this->clover_http_json('https://api.la.clover.com/oauth/v2/token', $payload2);
-      $dataR2 = json_decode($respR2 ?? '', true);
-
-      if (!($httpR2 >= 200 && $httpR2 < 300) || !is_array($dataR2) || empty($dataR2['access_token'])) {
-        $msg = "Refresh token falló para merchant {$merchantId}. Probablemente rotó/expiró. Re-conectá el merchant.";
-        $debug = [
-          'try_refresh_http' => $httpR,
-          'try_refresh_resp' => $respR,
-          'try_token_http' => $httpR2,
-          'try_token_resp' => $respR2,
-        ];
-        return [false, null, $msg . " DEBUG=" . json_encode($debug)];
-      }
-      $dataR = $dataR2;
+      return [false, null, $msg . " DEBUG=" . json_encode($debug)];
     }
 
     // Guardar tokens (y refresh_token rotado si viene)
@@ -1215,7 +1292,12 @@ $get_access_token_for_merchant = function($merchantId) use ($clientId, $clientSe
 // 1) obtener access_token válido para el merchant
 list($okTok, $accessToken, $errTok) = $get_access_token_for_merchant($merchantId);
 if (!$okTok) {
-  wp_send_json_error(['message' => $errTok]);
+  $reconnectUrl = $build_reconnect_url($merchantId);
+  wp_send_json_error([
+    'message' => $errTok,
+    'merchant_id' => $merchantId,
+    'reconnect_url' => $reconnectUrl,
+  ]);
 }
 
 

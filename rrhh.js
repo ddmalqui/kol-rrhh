@@ -4,6 +4,7 @@
   let __LAST_SUELDO_ROWS__ = [];
   let __CURRENT_LEGAJO__ = 0;
   let __CURRENT_CLOVER_ID__ = '';
+  let __CURRENT_CLOVER_PAIRS__ = [];
 
 
   const KOL_RRHH_AREAS = [
@@ -242,6 +243,12 @@ const KOL_RRHH_ROLES = [
         ${field('Clover ID', emp.clover_employee_id || '')}
       </div>
     `;
+
+    if (__FICHAJE_INIT__) {
+      refreshFichajeMerchants();
+      const hostF = document.getElementById('kolrrhh-fichaje-result');
+      if (hostF) hostF.innerHTML = '<div class="kolrrhh-muted">Seleccioná mes y comercio, y presioná “Visualizar…”</div>';
+    }
   }
 
   async function loadSueldoItemsForLegajo(legajoNum){
@@ -303,14 +310,78 @@ const KOL_RRHH_ROLES = [
     return opts;
   }
 
+  function parseCloverPairs(raw){
+    const out = [];
+    const s = String(raw || '').trim();
+    if (!s) return out;
+    const pairs = s.split(',').map(x => String(x).trim()).filter(Boolean);
+    for (const p of pairs){
+      const parts = p.split(';').map(x => String(x).trim());
+      if (parts.length !== 2) continue;
+      const merchant = parts[0];
+      const employee = parts[1];
+      if (!merchant || !employee) continue;
+      out.push({ merchant, employee, pair: `${merchant};${employee}` });
+    }
+    return out;
+  }
+
+  function refreshFichajeMerchants(){
+    const sel = document.getElementById('kolrrhh-fichaje-merchant');
+    const wrap = document.querySelector('.kolrrhh-fichaje-merchant-wrap');
+    if (!sel || !wrap) return;
+
+    __CURRENT_CLOVER_PAIRS__ = parseCloverPairs(__CURRENT_CLOVER_ID__);
+
+    // Si no hay pares, dejamos vacío y mostramos el select igual (para que se note el problema)
+    sel.innerHTML = '';
+    if (__CURRENT_CLOVER_PAIRS__.length === 0){
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = '— Sin Clover ID —';
+      sel.appendChild(opt);
+      wrap.style.display = '';
+      return;
+    }
+
+    // Si hay 1 solo, ocultamos el selector y lo seteamos igual
+    if (__CURRENT_CLOVER_PAIRS__.length === 1){
+      const only = __CURRENT_CLOVER_PAIRS__[0];
+      const opt = document.createElement('option');
+      opt.value = only.merchant;
+      opt.textContent = only.merchant;
+      sel.appendChild(opt);
+      sel.value = only.merchant;
+      wrap.style.display = 'none';
+      return;
+    }
+
+    // Hay varios: mostramos select
+    const opt0 = document.createElement('option');
+    opt0.value = '';
+    opt0.textContent = 'Seleccioná un comercio…';
+    sel.appendChild(opt0);
+
+    for (const item of __CURRENT_CLOVER_PAIRS__){
+      const opt = document.createElement('option');
+      opt.value = item.merchant;
+      opt.textContent = item.merchant;
+      sel.appendChild(opt);
+    }
+    wrap.style.display = '';
+    sel.value = '';
+  }
+
+
   function initFichajeUI(){
     if (__FICHAJE_INIT__) return;
 
     const sel = document.getElementById('kolrrhh-fichaje-month');
+    const selMerchant = document.getElementById('kolrrhh-fichaje-merchant');
     const btn = document.getElementById('kolrrhh-fichaje-load');
     const host = document.getElementById('kolrrhh-fichaje-result');
 
-    if (!sel || !btn || !host) return;
+    if (!sel || !selMerchant || !btn || !host) return;
 
     // Cargar opciones
     const options = getFichajeMonthOptions();
@@ -321,6 +392,8 @@ const KOL_RRHH_ROLES = [
       opt.textContent = o.label;
       sel.appendChild(opt);
     });
+
+    refreshFichajeMerchants();
 
     // Default: mes actual si está en la lista; si no, primero.
     const now = new Date();
@@ -359,13 +432,28 @@ const KOL_RRHH_ROLES = [
       return;
     }
 
+    // Merchant seleccionado (si hay varios comercios)
+    const pairs = parseCloverPairs(__CURRENT_CLOVER_ID__);
+    const selMerchant = document.getElementById('kolrrhh-fichaje-merchant');
+    let merchantId = selMerchant ? String(selMerchant.value || '').trim() : '';
+
+    if (pairs.length > 1 && !merchantId){
+      host.innerHTML = '<div class="kolrrhh-alert kolrrhh-alert-error">Este empleado tiene más de un comercio. Seleccioná el Comercio para continuar.</div>';
+      return;
+    }
+    if (pairs.length === 1){
+      merchantId = pairs[0].merchant;
+    }
+
     const fd = new FormData();
     fd.append('action', 'kol_rrhh_get_fichaje_html');
     fd.append('nonce', (window.KOL_RRHH && KOL_RRHH.nonce) ? KOL_RRHH.nonce : '');
     fd.append('month', m);
     fd.append('legajo', String(leg));
 
-    fetch((window.KOL_RRHH && KOL_RRHH.ajaxurl) ? KOL_RRHH.ajaxurl : '/wp-admin/admin-ajax.php', {
+    
+    fd.append('merchant_id', merchantId);
+fetch((window.KOL_RRHH && KOL_RRHH.ajaxurl) ? KOL_RRHH.ajaxurl : '/wp-admin/admin-ajax.php', {
       method: 'POST',
       credentials: 'same-origin',
       body: fd
@@ -374,7 +462,36 @@ const KOL_RRHH_ROLES = [
     .then(json => {
       if (!json || json.success !== true) {
         const msg = (json && json.data && json.data.message) ? json.data.message : 'Error cargando fichaje.';
-        host.innerHTML = '<div class="kolrrhh-alert kolrrhh-alert-error">'+escapeHtml(msg)+'</div>';
+        const reconnectUrl = (json && json.data && json.data.reconnect_url) ? String(json.data.reconnect_url) : '';
+
+        // Debug extra (viene desde PHP cuando falla el request a Clover)
+        const http = (json && json.data && typeof json.data.http !== 'undefined') ? String(json.data.http) : '';
+        const resp = (json && json.data && typeof json.data.resp !== 'undefined') ? String(json.data.resp) : '';
+        const curlErr = (json && json.data && typeof json.data.curl_err !== 'undefined') ? String(json.data.curl_err) : '';
+
+        let extra = '<div class="kolrrhh-muted" style="margin-top:8px; font-size:12px;">'
+          + 'Si querés, en el próximo paso te armo el botón dentro del plugin “Reconectar merchant seleccionado” para no copiar/pegar URLs.'
+          + '</div>';
+
+        if (reconnectUrl) {
+          extra = '<div style="margin-top:12px;">'
+            + '<a class="kolrrhh-btn kolrrhh-btn-secondary" target="_blank" rel="noopener" href="'+escapeHtml(reconnectUrl)+'">'
+            + 'Reconectar merchant seleccionado'
+            + '</a>'
+            + extra
+            + '</div>';
+        }
+
+        let dbg = '';
+        if (http || resp || curlErr) {
+          dbg += '<details style="margin-top:10px;"><summary style="cursor:pointer;">Ver detalle técnico</summary>';
+          if (http) dbg += '<div style="margin-top:6px; font-size:12px;"><b>HTTP:</b> ' + escapeHtml(http) + '</div>';
+          if (curlErr) dbg += '<div style="margin-top:6px; font-size:12px;"><b>CURL:</b> ' + escapeHtml(curlErr) + '</div>';
+          if (resp) dbg += '<pre style="white-space:pre-wrap; word-break:break-word; margin-top:8px; padding:10px; border-radius:10px; background:rgba(0,0,0,0.05); font-size:12px;">' + escapeHtml(resp).slice(0, 5000) + '</pre>';
+          dbg += '</details>';
+        }
+
+        host.innerHTML = '<div class="kolrrhh-alert kolrrhh-alert-error">'+escapeHtml(msg)+ extra + dbg +'</div>';
         return;
       }
       host.innerHTML = (json.data && json.data.html) ? json.data.html : '<div class="kolrrhh-muted">Sin contenido.</div>';
