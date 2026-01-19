@@ -32,9 +32,64 @@ final class KOL_RRHH_Plugin {
     $base = plugin_dir_url(__FILE__);
     wp_register_style('kol-rrhh-style', $base.'style.css', [], self::VERSION);
     wp_register_script('kol-rrhh-js', $base.'rrhh.js', ['jquery'], self::VERSION, true);
-    wp_localize_script('kol-rrhh-js', 'KOL_RRHH', ['ajaxurl' => admin_url('admin-ajax.php'),'nonce'   => wp_create_nonce('kol_rrhh_nonce'),
-]);
+    wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
+      'ajaxurl' => admin_url('admin-ajax.php'),
+      'nonce'   => wp_create_nonce('kol_rrhh_nonce'),
+      // Mapa MerchantID -> Nombre amigable (para el select de Comercio en Fichaje)
+      'merchant_map' => $this->get_clover_merchant_map(),
+    ]);
 
+  }
+
+  /**
+   * Devuelve un mapa asociativo MerchantID -> Nombre del comercio.
+   * Se cachea para evitar consultar la tabla en cada request.
+   *
+   * Espera una tabla wp_kol_rrhh_clovers (o con prefix) con columnas tipo:
+   * - merchant_id / num_comercio / comercio_id ...
+   * - merchant_name / nombre / comercio_nombre ...
+   */
+  private function get_clover_merchant_map(){
+    $cacheKey = 'kol_rrhh_clover_merchant_map_v1';
+    $cached = get_transient($cacheKey);
+    if (is_array($cached)) return $cached;
+
+    global $wpdb;
+    $table = $wpdb->prefix . 'kol_rrhh_clovers';
+    $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table));
+    if ($exists !== $table) {
+      set_transient($cacheKey, [], 12 * HOUR_IN_SECONDS);
+      return [];
+    }
+
+    $cols = $wpdb->get_col("SHOW COLUMNS FROM {$table}", 0);
+    $cols = is_array($cols) ? $cols : [];
+
+    $colId = '';
+    foreach (['merchant_id','num_comercio','comercio_id','merchant','id_comercio'] as $c){
+      if (in_array($c, $cols, true)) { $colId = $c; break; }
+    }
+    $colName = '';
+    foreach (['merchant_name','nombre','comercio_nombre','name','descripcion'] as $c){
+      if (in_array($c, $cols, true)) { $colName = $c; break; }
+    }
+
+    if ($colId === '' || $colName === '') {
+      set_transient($cacheKey, [], 12 * HOUR_IN_SECONDS);
+      return [];
+    }
+
+    $rows = $wpdb->get_results("SELECT {$colId} AS mid, {$colName} AS mname FROM {$table}", ARRAY_A) ?: [];
+    $map = [];
+    foreach ($rows as $r){
+      $mid = isset($r['mid']) ? trim((string)$r['mid']) : '';
+      $mname = isset($r['mname']) ? trim((string)$r['mname']) : '';
+      if ($mid === '' || $mname === '') continue;
+      $map[$mid] = $mname;
+    }
+
+    set_transient($cacheKey, $map, 12 * HOUR_IN_SECONDS);
+    return $map;
   }
 
   private function table_name(){
@@ -163,15 +218,14 @@ final class KOL_RRHH_Plugin {
     <div class="kolrrhh-form-field kolrrhh-fichaje-merchant-wrap" style="max-width: 320px;">
       <label class="kolrrhh-modal-label" style="margin-bottom:6px;">Comercio</label>
       <select id="kolrrhh-fichaje-merchant" class="kolrrhh-modal-input"></select>
-      <div class="kolrrhh-muted" style="margin-top:6px; font-size:12px;">Si este empleado trabaja en más de un comercio, elegí cuál querés consultar.</div>
     </div>
 <div class="kolrrhh-form-field" style="max-width: 260px;">
       <label class="kolrrhh-modal-label" style="margin-bottom:6px;">&nbsp;</label>
-      <button type="button" class="kolrrhh-btn kolrrhh-btn-primary" id="kolrrhh-fichaje-load">Visualizar fichados del mes</button>
+      <button type="button" class="kolrrhh-btn kolrrhh-btn-primary" id="kolrrhh-fichaje-load">Ver</button>
     </div>
   </div>
 
-  <div id="kolrrhh-fichaje-result" class="kolrrhh-muted">Seleccioná un mes y presioná “Visualizar fichados del mes”.</div>
+  <div id="kolrrhh-fichaje-result" class="kolrrhh-muted">Seleccioná un mes y presioná “Ver”.</div>
 </div>
               </div>
             </div>
@@ -1405,12 +1459,10 @@ $dayKey = $this->fmt_day_key($inDt);
                     <?php foreach ($day['items'] as $it): ?>
                       <div class="rowshift">
                         <div>
-                          <div class="label">Inicio</div>
                           <div class="time"><?php echo esc_html($this->fmt_hm($it['in_dt'])); ?></div>
                         </div>
                         <div class="arrow">→</div>
                         <div>
-                          <div class="label">Fin</div>
                           <div class="time"><?php echo $it['out_dt'] ? esc_html($this->fmt_hm($it['out_dt'])) : '—'; ?></div>
                         </div>
                       </div>

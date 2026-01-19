@@ -247,7 +247,7 @@ const KOL_RRHH_ROLES = [
     if (__FICHAJE_INIT__) {
       refreshFichajeMerchants();
       const hostF = document.getElementById('kolrrhh-fichaje-result');
-      if (hostF) hostF.innerHTML = '<div class="kolrrhh-muted">Seleccioná mes y comercio, y presioná “Visualizar…”</div>';
+      if (hostF) hostF.innerHTML = '<div class="kolrrhh-muted">Seleccioná mes y comercio, y presioná “Ver”.</div>';
     }
   }
 
@@ -331,6 +331,11 @@ const KOL_RRHH_ROLES = [
     const wrap = document.querySelector('.kolrrhh-fichaje-merchant-wrap');
     if (!sel || !wrap) return;
 
+    // Mapa MerchantID -> Nombre (inyectado desde PHP via wp_localize_script)
+    const merchantMap = (window.KOL_RRHH && typeof KOL_RRHH.merchant_map === 'object' && KOL_RRHH.merchant_map)
+      ? KOL_RRHH.merchant_map
+      : {};
+
     __CURRENT_CLOVER_PAIRS__ = parseCloverPairs(__CURRENT_CLOVER_ID__);
 
     // Si no hay pares, dejamos vacío y mostramos el select igual (para que se note el problema)
@@ -349,7 +354,7 @@ const KOL_RRHH_ROLES = [
       const only = __CURRENT_CLOVER_PAIRS__[0];
       const opt = document.createElement('option');
       opt.value = only.merchant;
-      opt.textContent = only.merchant;
+      opt.textContent = (merchantMap[only.merchant] || only.merchant);
       sel.appendChild(opt);
       sel.value = only.merchant;
       wrap.style.display = 'none';
@@ -365,7 +370,7 @@ const KOL_RRHH_ROLES = [
     for (const item of __CURRENT_CLOVER_PAIRS__){
       const opt = document.createElement('option');
       opt.value = item.merchant;
-      opt.textContent = item.merchant;
+      opt.textContent = (merchantMap[item.merchant] || item.merchant);
       sel.appendChild(opt);
     }
     wrap.style.display = '';
