@@ -983,6 +983,7 @@ if (areaSel) {
 
     setVal('kolrrhh-sueldo-jornada', row?.jornada || '');
 
+    setVal('kolrrhh-sueldo-efectivo', row?.efectivo ?? '');
     setVal('kolrrhh-sueldo-transferencia', row?.transferencia ?? '');
     setVal('kolrrhh-sueldo-creditos', row?.creditos ?? '');
     setVal('kolrrhh-sueldo-bono', row?.bono ?? '');
@@ -996,7 +997,7 @@ if (areaSel) {
 
 
     // money formatting (en blur ya se formatea)
-    ['kolrrhh-sueldo-transferencia','kolrrhh-sueldo-creditos','kolrrhh-sueldo-bono','kolrrhh-sueldo-descuentos','kolrrhh-sueldo-liquidacion']
+    ['kolrrhh-sueldo-efectivo','kolrrhh-sueldo-transferencia','kolrrhh-sueldo-creditos','kolrrhh-sueldo-bono','kolrrhh-sueldo-descuentos','kolrrhh-sueldo-liquidacion']
       .forEach(id => {
         const el = qs(id);
         if (el) { attachMoneyInput(el); el.dispatchEvent(new Event('blur')); }
@@ -1008,7 +1009,7 @@ if (areaSel) {
     modal.setAttribute('aria-hidden','false');
 
     // focus
-    const focusId = isEdit ? 'kolrrhh-sueldo-transferencia' : 'kolrrhh-sueldo-periodo-inicio';
+    const focusId = isEdit ? 'kolrrhh-sueldo-efectivo' : 'kolrrhh-sueldo-periodo-inicio';
     setTimeout(() => { const f = qs(focusId); if (f) f.focus(); }, 0);
   }
 
@@ -1059,7 +1060,7 @@ if (areaSel) {
 
 
     ['kolrrhh-sueldo-periodo-inicio','kolrrhh-sueldo-periodo-fin','kolrrhh-sueldo-rol','kolrrhh-sueldo-jornada',
-     'kolrrhh-sueldo-transferencia','kolrrhh-sueldo-creditos','kolrrhh-sueldo-bono','kolrrhh-sueldo-descuentos','kolrrhh-sueldo-liquidacion',
+     'kolrrhh-sueldo-efectivo','kolrrhh-sueldo-transferencia','kolrrhh-sueldo-creditos','kolrrhh-sueldo-bono','kolrrhh-sueldo-descuentos','kolrrhh-sueldo-liquidacion',
      'kolrrhh-sueldo-vac-tomadas','kolrrhh-sueldo-feriados','kolrrhh-sueldo-vac-no-tomadas'
     ].forEach(id => setVal(id, ''));
 
@@ -1123,6 +1124,7 @@ if (areaSel) {
 
             <div class="kolrrhh-sueldo-actions">
               <button type="button" class="kolrrhh-btn kolrrhh-btn-small" data-sueldo-edit="1" data-id="${r.id}">Editar</button>
+              <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary" data-sueldo-print="1" data-id="${r.id}">PDF</button>
             </div>
           </div>
 
@@ -1132,12 +1134,14 @@ if (areaSel) {
             <table class="kolrrhh-sueldo-table">
               <thead>
                 <tr>
+                  <th>Efectivo</th>
                   <th>Transferencia</th>
                   <th>Créditos</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
+                  <td>${moneyAR(r.efectivo)}</td>
                   <td>${moneyAR(r.transferencia)}</td>
                   <td>${moneyAR(r.creditos)}</td>
                 </tr>
@@ -1595,6 +1599,19 @@ body.set('clover_employee_id', clover_employee_id);
         openSueldoModal(row, leg);
         return;
       }
+
+      // PDF / Imprimir (delegación)
+      const print = ev.target.closest('[data-sueldo-print="1"]');
+      if (print) {
+        ev.preventDefault();
+
+        const id = Number(print.getAttribute('data-id') || 0);
+        if (!id) return;
+
+        const url = `${KOL_RRHH.ajaxurl}?action=kol_rrhh_print_sueldo_item&nonce=${encodeURIComponent(KOL_RRHH.nonce)}&id=${id}`;
+        window.open(url, '_blank');
+        return;
+      }
     });
 
     // Guardar item sueldo (AJAX)
@@ -1632,6 +1649,7 @@ body.set('clover_employee_id', clover_employee_id);
         payload.set('area', getVal('kolrrhh-sueldo-area'));
         payload.set('jornada', getVal('kolrrhh-sueldo-jornada'));
 
+        payload.set('efectivo', getVal('kolrrhh-sueldo-efectivo'));
         payload.set('transferencia', getVal('kolrrhh-sueldo-transferencia'));
         payload.set('creditos', getVal('kolrrhh-sueldo-creditos'));
         payload.set('bono', getVal('kolrrhh-sueldo-bono'));

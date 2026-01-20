@@ -21,8 +21,8 @@ final class KOL_RRHH_Plugin {
     add_action('wp_ajax_kol_rrhh_get_desempeno_items', [$this,'ajax_get_desempeno_items']);
     add_action('wp_ajax_kol_rrhh_save_desempeno_item', [$this,'ajax_save_desempeno_item']);
     add_action('wp_ajax_kol_rrhh_delete_desempeno_item', [$this,'ajax_delete_desempeno_item']);
-
     add_action('wp_ajax_kol_rrhh_get_fichaje_html', [$this,'ajax_get_fichaje_html']);
+    add_action('wp_ajax_kol_rrhh_print_sueldo_item', [$this, 'ajax_print_sueldo_item']);
 
 
     add_shortcode(self::SHORTCODE, [$this,'shortcode']);
@@ -416,7 +416,11 @@ final class KOL_RRHH_Plugin {
 </div>
       </div>
 
-      <div class="kolrrhh-form-row" style="--cols:2;">
+      <div class="kolrrhh-form-row" style="--cols:3;">
+        <div class="kolrrhh-form-field">
+          <label class="kolrrhh-modal-label">Efectivo</label>
+          <input id="kolrrhh-sueldo-efectivo" type="text" inputmode="decimal" class="kolrrhh-modal-input kolrrhh-money" />
+        </div>
         <div class="kolrrhh-form-field">
           <label class="kolrrhh-modal-label">Transferencia</label>
           <input id="kolrrhh-sueldo-transferencia" type="text" inputmode="decimal" class="kolrrhh-modal-input kolrrhh-money" />
@@ -560,7 +564,7 @@ public function ajax_get_sueldo_items(){
   $rows = $wpdb->get_results(
     $wpdb->prepare(
       "SELECT id, legajo, periodo_inicio, periodo_fin, area, rol,
-              transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas
+              efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas
        FROM {$table}
        WHERE legajo = %d
        ORDER BY periodo_inicio DESC, id DESC",
@@ -817,6 +821,8 @@ if (!$rol || !$area) {
     return floatval($v);
   };
 
+
+  $efectivo     = $to_num($_POST['efectivo'] ?? '');
   $transferencia = $to_num($_POST['transferencia'] ?? '');
   $creditos      = $to_num($_POST['creditos'] ?? '');
   $bono          = $to_num($_POST['bono'] ?? '');
@@ -841,6 +847,7 @@ if (!$rol || !$area) {
     'periodo_fin' => $periodo_fin,
     'rol' => $rol,
     'area' => $area,
+    'efectivo' => $efectivo,
     'transferencia' => $transferencia,
     'creditos' => $creditos,
     'jornada' => $jornada,
@@ -851,18 +858,18 @@ if (!$rol || !$area) {
     'liquidacion' => $liquidacion,
     'vac_no_tomadas' => $vac_no_tomadas
   ];
-$formats = ['%d','%s','%s','%s','%s','%f','%f','%s','%f','%f','%d','%d','%f','%d'];
+$formats = ['%d','%s','%s','%s','%s','%f','%f','%f','%s','%f','%f','%d','%d','%f','%d'];
 
   if ($id > 0) {
     $ok = $wpdb->update($table, $data, ['id' => $id], $formats, ['%d']);
     if ($ok === false) wp_send_json_error(['message' => 'No se pudo actualizar']);
-    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, rol, area, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $id), ARRAY_A);
+    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, rol, area, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $id), ARRAY_A);
     wp_send_json_success(['row' => $row]);
   } else {
     $ok = $wpdb->insert($table, $data, $formats);
     if (!$ok) wp_send_json_error(['message' => 'No se pudo insertar']);
     $new_id = intval($wpdb->insert_id);
-    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, rol, area, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $new_id), ARRAY_A);
+    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, rol, area, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $new_id), ARRAY_A);
     wp_send_json_success(['row' => $row]);
   }
 }
@@ -1480,6 +1487,207 @@ $dayKey = $this->fmt_day_key($inDt);
 
     wp_send_json_success(['html' => $html]);
   }
+
+  public function ajax_print_sueldo_item(){
+  if (!isset($_GET['nonce']) || !wp_verify_nonce($_GET['nonce'], 'kol_rrhh_nonce')) {
+    wp_die('Nonce inválido');
+  }
+  if (!is_user_logged_in()) wp_die('No autorizado');
+
+  $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+  if ($id <= 0) wp_die('ID inválido');
+
+  global $wpdb;
+  $table = $this->sueldos_items_table();
+
+  $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id=%d", $id), ARRAY_A);
+  if (!$row) wp_die('Item no encontrado');
+
+  // Buscar datos básicos del empleado por legajo (ajustá si tu tabla tiene otro nombre)
+  $emp = $wpdb->get_row($wpdb->prepare(
+    "SELECT nombre, legajo, dni, cuil FROM {$this->table_name()} WHERE legajo=%d LIMIT 1",
+    intval($row['legajo'])
+  ), ARRAY_A);
+
+  $nombre = $emp['nombre'] ?? '—';
+  $legajo = $emp['legajo'] ?? ($row['legajo'] ?? '—');
+
+  // helpers
+  $fmt = function($n){
+    $n = (float)$n;
+    return '$' . number_format($n, 0, ',', '.'); // sin centavos para que quede como tus pantallas
+  };
+
+  $periodo_inicio = $row['periodo_inicio'] ?? '';
+  $periodo_fin    = $row['periodo_fin'] ?? '';
+  $mes_label = $periodo_inicio ? strtoupper(date_i18n('F Y', strtotime($periodo_inicio))) : strtoupper(date_i18n('F Y'));
+
+  $efectivo = (float)($row['efectivo'] ?? 0);
+  $transfer = (float)($row['transferencia'] ?? 0);
+  $creditos = (float)($row['creditos'] ?? 0);
+
+  $total_pago = $efectivo + $transfer + $creditos;
+
+  header('Content-Type: text/html; charset=UTF-8');
+
+  echo $this->render_print_html([
+    'nombre' => $nombre,
+    'legajo' => $legajo,
+    'mes_label' => $mes_label,
+    'periodo_inicio' => $periodo_inicio,
+    'periodo_fin' => $periodo_fin,
+    'rol' => $row['rol'] ?? '',
+    'area' => $row['area'] ?? '',
+    'efectivo' => $efectivo,
+    'transferencia' => $transfer,
+    'creditos' => $creditos,
+    'total_pago' => $total_pago,
+    'fmt' => $fmt,
+    'row' => $row,
+  ]);
+
+  exit;
+}
+
+private function render_print_html($d){
+  $fmt = $d['fmt'];
+  $row = $d['row'];
+
+  // Solo mostramos filas si hay dato (para tu idea “lo que no tengo no lo coloco”)
+  $maybeRow = function($label, $value) use ($fmt){
+    if ($value === null || $value === '' || (is_numeric($value) && (float)$value == 0)) return '';
+    $v = is_numeric($value) ? $fmt($value) : esc_html($value);
+    return "<tr><td>{$label}</td><td class='right'>{$v}</td></tr>";
+  };
+
+  ob_start(); ?>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Recibo <?php echo esc_html($d['nombre']); ?> - <?php echo esc_html($d['mes_label']); ?></title>
+  <style>
+    /* ====== Print setup ====== */
+    @page { size: A4; margin: 14mm; }
+    body { font-family: Arial, Helvetica, sans-serif; color:#111; font-size: 12px; }
+    .sheet { max-width: 780px; margin: 0 auto; }
+    .top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; border-bottom:1px solid #ddd; padding-bottom:12px; margin-bottom:14px; }
+    .brand { font-weight: 800; font-size: 14px; letter-spacing:.02em; }
+    .muted { color:#555; }
+    .h1 { font-weight: 900; font-size: 16px; margin: 2px 0 4px; }
+    .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin-top:10px; }
+    .kv { border:1px solid #e2e2e2; border-radius:10px; padding:10px 12px; }
+    .kv .k { font-weight: 800; color:#555; font-size: 11px; text-transform: uppercase; letter-spacing:.06em; margin-bottom:4px; }
+    .kv .v { font-weight: 800; font-size: 13px; }
+    .section { margin-top: 14px; }
+    .section-title { font-weight: 900; text-transform: uppercase; letter-spacing:.08em; font-size: 11px; color:#666; margin-bottom:8px; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { border:1px solid #e6e6e6; padding:10px; }
+    th { background:#f6f6f6; font-weight: 900; text-transform: uppercase; font-size: 11px; letter-spacing:.06em; }
+    .right { text-align:right; }
+    .center { text-align:center; }
+    .note { margin-top: 12px; line-height: 1.45; }
+    .sign { display:flex; justify-content:space-between; gap: 18px; margin-top: 200px; }
+    .line { width: 48%; border-top: 1px solid #111; padding-top: 6px; text-align:center; font-weight:700; }
+    .small { font-size: 11px; }
+    .printbar { display:flex; justify-content:flex-end; margin: 8px 0 14px; }
+    .btn { background:#111; color:#fff; border:0; padding:10px 12px; border-radius:10px; font-weight:800; cursor:pointer; }
+    @media print {
+      .printbar { display:none; }
+      body { margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sheet page">
+  <div class="sheet">
+
+    <div class="printbar">
+      <button class="btn" onclick="window.print()">Imprimir / Guardar PDF</button>
+    </div>
+
+    <div class="top">
+      <div>
+        <div class="brand">KOL ACCESORIOS</div>
+        <div class="h1"><?php echo esc_html($d['nombre']); ?></div>
+        <div class="muted">Legajo: <strong><?php echo esc_html($d['legajo']); ?></strong></div>
+      </div>
+      <div class="muted">
+        <div><strong>Período:</strong> <?php echo esc_html($d['mes_label']); ?></div>
+        <?php if ($d['periodo_inicio'] && $d['periodo_fin']): ?>
+          <div class="small"><?php echo esc_html($d['periodo_inicio']); ?> → <?php echo esc_html($d['periodo_fin']); ?></div>
+        <?php endif; ?>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <?php if (!empty($d['area'])): ?>
+        <div class="kv"><div class="k">Área / Local</div><div class="v"><?php echo esc_html($d['area']); ?></div></div>
+      <?php endif; ?>
+      <?php if (!empty($d['rol'])): ?>
+        <div class="kv"><div class="k">Rol</div><div class="v"><?php echo esc_html($d['rol']); ?></div></div>
+      <?php endif; ?>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Pago</div>
+      <table>
+        <thead>
+          <tr>
+            <th class="center">Efectivo</th>
+            <th class="center">Transferencia</th>
+            <th class="center">Créditos</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="center"><?php echo $fmt($d['efectivo']); ?></td>
+            <td class="center"><?php echo $fmt($d['transferencia']); ?></td>
+            <td class="center"><?php echo $fmt($d['creditos']); ?></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="note"><strong>Total pagado:</strong> <?php echo $fmt($d['total_pago']); ?></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Detalles</div>
+      <table>
+        <thead>
+          <tr><th>Concepto</th><th class="right">Monto</th></tr>
+        </thead>
+        <tbody>
+          <?php
+            echo $maybeRow('Jornada', $row['jornada'] ?? '');
+            echo $maybeRow('Bono', $row['bono'] ?? 0);
+            echo $maybeRow('Descuentos', $row['descuentos'] ?? 0);
+            echo $maybeRow('Vac. tomadas', $row['vac_tomadas'] ?? 0);
+            echo $maybeRow('Feriados', $row['feriados'] ?? 0);
+            echo $maybeRow('Liquidación', $row['liquidacion'] ?? 0);
+            echo $maybeRow('Vac. no tomadas', $row['vac_no_tomadas'] ?? 0);
+          ?>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      Yo <strong><?php echo esc_html($d['nombre']); ?></strong> recibí de <strong>KOL ACCESORIOS</strong>
+      los haberes correspondientes al período <strong><?php echo esc_html($d['mes_label']); ?></strong>.
+    </div>
+    
+    <div class="sign">
+      <div class="line">Firma Empleado</div>
+      <div class="line">Firma Empleador</div>
+    </div>
+
+  </div>
+      </div>
+</body>
+</html>
+<?php
+  return ob_get_clean();
+}
+
 
 }
 
