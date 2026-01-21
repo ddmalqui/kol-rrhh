@@ -191,8 +191,12 @@ const KOL_RRHH_ROLES = [
       direccion: e.direccion ?? e.Direccion ?? '',
       ciudad: e.ciudad ?? e.Ciudad ?? '',
       fecha_nacimiento: e.fecha_nacimiento ?? e.fechaNacimiento ?? e.nacimiento ?? e.Nacimiento ?? '',
+      ultima_fecha_ingreso: e.ultima_fecha_ingreso ?? e.ultimaFechaIngreso ?? e.ultimo_ingreso ?? e.ultimoIngreso ?? '',
       categoria: e.categoria ?? e.Categoria ?? '',
       clover_employee_id: e.clover_employee_id ?? e.cloverEmployeeId ?? '',
+
+      // suele venir como string largo (22 dígitos)
+      cbu: e.cbu ?? e.CBU ?? '',
 
     };
   }
@@ -241,6 +245,8 @@ const KOL_RRHH_ROLES = [
         ${field('Ciudad', emp.ciudad)}
         ${field('Nacimiento', emp.fecha_nacimiento)}
         ${field('Clover ID', emp.clover_employee_id || '')}
+        ${field('Último ingreso', emp.ultima_fecha_ingreso)}
+        ${field('CBU', emp.cbu)}
       </div>
     `;
 
@@ -1198,8 +1204,10 @@ if (areaSel) {
     const fDir = qs('kolrrhh-modal-direccion');
     const fCiu = qs('kolrrhh-modal-ciudad');          // ahora debería ser <select>
     const fNac = qs('kolrrhh-modal-fecha_nacimiento');// ahora debería ser <input type="date">
+    const fUlt = qs('kolrrhh-modal-ultima_fecha_ingreso'); // <input type="date">
     const fEstado = qs('kolrrhh-modal-estado');       // select
     const fClover = qs('kolrrhh-modal-clover_employee_id');
+    const fCBU = qs('kolrrhh-modal-cbu');
 
 
     if (!modal || !title || !idEl || !legEl || !fNombre) return;
@@ -1233,8 +1241,15 @@ if (areaSel) {
         fNac.value = v.includes('/') ? dmyToISO(v) : v;
       }
 
+      if (fUlt) {
+        const v = emp.ultima_fecha_ingreso ?? '';
+        // si viene DD/MM/AAAA lo pasamos a ISO para el date picker
+        fUlt.value = v.includes('/') ? dmyToISO(v) : v;
+      }
+
       if (fEstado) fEstado.value = (emp.estado ?? 'ACTIVO');
       if (fClover) fClover.value = emp.clover_employee_id ?? '';
+      if (fCBU) fCBU.value = onlyDigits(emp.cbu ?? '').slice(0, 30);
 
     } else {
       legajoNum = getMaxLegajoFromDom() + 1;
@@ -1248,8 +1263,10 @@ if (areaSel) {
       if (fDir) fDir.value = '';
       if (fCiu) fCiu.value = '';
       if (fNac) fNac.value = '';
+      if (fUlt) fUlt.value = '';
       if (fEstado) fEstado.value = 'ACTIVO';
       if (fClover) fClover.value = '';
+      if (fCBU) fCBU.value = '';
 
     }
 
@@ -1455,6 +1472,14 @@ if (areaSel) {
         const nacISO = (qs('kolrrhh-modal-fecha_nacimiento')?.value || '').trim();
         const fecha_nacimiento = nacISO ? isoToDMY(nacISO) : '';
 
+        // Último ingreso: date input (ISO) -> DD/MM/AAAA
+        const ultISO = (qs('kolrrhh-modal-ultima_fecha_ingreso')?.value || '').trim();
+        const ultima_fecha_ingreso = ultISO ? isoToDMY(ultISO) : '';
+
+        // CBU: solo números
+        let cbu = (qs('kolrrhh-modal-cbu')?.value || '').trim();
+        cbu = onlyDigits(cbu).slice(0, 30);
+
         const empId = (qs('kolrrhh-modal-id')?.value || '').trim();
 
         // ==== VALIDACIONES ====
@@ -1479,6 +1504,13 @@ if (areaSel) {
 
         if (cuil && cuil.length !== 11) {
           alert('CUIL inválido (debe tener 11 dígitos, solo números).');
+          return;
+        }
+
+        if (cbu && cbu.length < 22) {
+          // no bloquea por completo (hay casos de CBU/CVU con 22 dígitos),
+          // pero al menos avisamos
+          alert('CBU incompleto (normalmente son 22 dígitos).');
           return;
         }
 
@@ -1509,7 +1541,9 @@ if (areaSel) {
           body.set('direccion', direccion);
           body.set('ciudad', ciudad);
           body.set('fecha_nacimiento', fecha_nacimiento);
+          body.set('ultima_fecha_ingreso', ultima_fecha_ingreso);
           body.set('estado', estado);
+          body.set('cbu', cbu);
           let clover_employee_id = (qs('kolrrhh-modal-clover_employee_id')?.value || '').trim();
 clover_employee_id = clover_employee_id.replace(/\s*,\s*/g, ','); // opcional, mismo criterio que en PHP
 

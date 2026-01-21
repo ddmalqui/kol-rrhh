@@ -345,6 +345,13 @@ final class KOL_RRHH_Plugin {
   </div>
 
   <div class="kolrrhh-field">
+    <div class="kolrrhh-k">Último ingreso</div>
+    <div class="kolrrhh-v">
+      <input type="date" id="kolrrhh-modal-ultima_fecha_ingreso" class="kolrrhh-modal-input" />
+    </div>
+  </div>
+
+  <div class="kolrrhh-field">
     <div class="kolrrhh-k">Estado</div>
     <div class="kolrrhh-v">
       <select id="kolrrhh-modal-estado" class="kolrrhh-modal-input">
@@ -369,6 +376,21 @@ final class KOL_RRHH_Plugin {
     />
   </div>
 </div>
+
+<div class="kolrrhh-field">
+  <div class="kolrrhh-k">CBU</div>
+  <div class="kolrrhh-v">
+    <input
+      type="text"
+      id="kolrrhh-modal-cbu"
+      class="kolrrhh-modal-input"
+      maxlength="30"
+      placeholder="Ej: 2850371240095315610248"
+      autocomplete="off"
+    />
+  </div>
+</div>
+
 </div>
 
 
@@ -904,6 +926,10 @@ $obra     = isset($_POST['obra_social']) ? sanitize_text_field($_POST['obra_soci
 $dir      = isset($_POST['direccion']) ? sanitize_text_field($_POST['direccion']) : '';
 $ciudad   = isset($_POST['ciudad']) ? sanitize_text_field($_POST['ciudad']) : '';
 $nac      = isset($_POST['fecha_nacimiento']) ? sanitize_text_field($_POST['fecha_nacimiento']) : '';
+$ult      = isset($_POST['ultima_fecha_ingreso']) ? sanitize_text_field($_POST['ultima_fecha_ingreso']) : '';
+$estado   = isset($_POST['estado']) ? sanitize_text_field($_POST['estado']) : 'ACTIVO';
+$cbu      = isset($_POST['cbu']) ? sanitize_text_field($_POST['cbu']) : '';
+$cbu      = preg_replace('/\D+/', '', $cbu);
 $clover_employee_id = isset($_POST['clover_employee_id']) ? sanitize_text_field($_POST['clover_employee_id']) : '';
 $clover_employee_id = trim($clover_employee_id);
 
@@ -930,10 +956,13 @@ $clover_employee_id = preg_replace('/\s*,\s*/', ',', $clover_employee_id);
     'direccion' => $dir,
     'ciudad' => $ciudad,
     'fecha_nacimiento' => $nac,
+    'ultima_fecha_ingreso' => $ult,
+    'estado' => $estado,
     'clover_employee_id' => $clover_employee_id,
+    'cbu' => $cbu,
   ],
   ['id' => $id],
-  ['%s','%s','%s','%s','%s','%s','%s','%s','%s'],
+  ['%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s'],
   ['%d']
 );
 
@@ -957,7 +986,7 @@ $clover_employee_id = preg_replace('/\s*,\s*/', ',', $clover_employee_id);
   [
     'nombre' => $nombre,
     'legajo' => (string)$next,
-    'estado' => 'ACTIVO',
+    'estado' => $estado ? $estado : 'ACTIVO',
     'telefono' => $telefono,
     'dni' => $dni,
     'cuil' => $cuil,
@@ -965,9 +994,11 @@ $clover_employee_id = preg_replace('/\s*,\s*/', ',', $clover_employee_id);
     'direccion' => $dir,
     'ciudad' => $ciudad,
     'fecha_nacimiento' => $nac,
+    'ultima_fecha_ingreso' => $ult,
     'clover_employee_id' => $clover_employee_id,
+    'cbu' => $cbu,
   ],
-  ['%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s']
+  ['%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s']
 );
 
 
@@ -1009,7 +1040,9 @@ $clover_employee_id = preg_replace('/\s*,\s*/', ',', $clover_employee_id);
         'direccion' => (string)($e['direccion'] ?? ''),
         'ciudad' => (string)($e['ciudad'] ?? ''),
         'fecha_nacimiento' => (string)($e['fecha_nacimiento'] ?? ''),
+        'ultima_fecha_ingreso' => (string)($e['ultima_fecha_ingreso'] ?? ''),
         'clover_employee_id' => (string)($e['clover_employee_id'] ?? ''),
+        'cbu' => (string)($e['cbu'] ?? ''),
       ];
 
       $html .= sprintf(
