@@ -418,7 +418,7 @@ final class KOL_RRHH_Plugin {
       <input type="hidden" id="kolrrhh-sueldo-id" value="0" />
       <input type="hidden" id="kolrrhh-sueldo-legajo" value="" />
 
-<div class="kolrrhh-form-row" style="--cols:4;">
+<div class="kolrrhh-form-row" style="--cols:5;">
         <div class="kolrrhh-form-field">
           <label class="kolrrhh-modal-label">Fecha inicio *</label>
           <input id="kolrrhh-sueldo-periodo-inicio" type="date" class="kolrrhh-modal-input" />
@@ -435,6 +435,11 @@ final class KOL_RRHH_Plugin {
 <div class="kolrrhh-form-field">
   <label class="kolrrhh-modal-label">Rol</label>
   <select id="kolrrhh-sueldo-rol" class="kolrrhh-modal-input"></select>
+</div>
+
+<div class="kolrrhh-form-field">
+  <label class="kolrrhh-modal-label">Participación</label>
+  <select id="kolrrhh-sueldo-participacion" class="kolrrhh-modal-input"></select>
 </div>
       </div>
 
@@ -585,7 +590,7 @@ public function ajax_get_sueldo_items(){
 
   $rows = $wpdb->get_results(
     $wpdb->prepare(
-      "SELECT id, legajo, periodo_inicio, periodo_fin, area, rol,
+      "SELECT id, legajo, periodo_inicio, periodo_fin, area, rol, participacion,
               efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas
        FROM {$table}
        WHERE legajo = %d
@@ -831,6 +836,11 @@ if (!$rol || !$area) {
   }
 
   $rol      = isset($_POST['rol']) ? sanitize_text_field($_POST['rol']) : '';
+  // Participación: decimal 0.0 a 10.0 (paso 0.5 en la UI)
+  $participacion = isset($_POST['participacion']) ? floatval(str_replace(',', '.', sanitize_text_field($_POST['participacion']))) : 0;
+  if ($participacion < 0) $participacion = 0;
+  if ($participacion > 10) $participacion = 10;
+
   $area = isset($_POST['area']) ? sanitize_text_field($_POST['area']) : '';
   $jornada  = isset($_POST['jornada']) ? sanitize_text_field($_POST['jornada']) : '';
 
@@ -868,6 +878,7 @@ if (!$rol || !$area) {
     'periodo_inicio' => $periodo_inicio,
     'periodo_fin' => $periodo_fin,
     'rol' => $rol,
+    'participacion' => $participacion,
     'area' => $area,
     'efectivo' => $efectivo,
     'transferencia' => $transferencia,
@@ -880,18 +891,18 @@ if (!$rol || !$area) {
     'liquidacion' => $liquidacion,
     'vac_no_tomadas' => $vac_no_tomadas
   ];
-$formats = ['%d','%s','%s','%s','%s','%f','%f','%f','%s','%f','%f','%d','%d','%f','%d'];
+$formats = ['%d','%s','%s','%s','%f','%s','%f','%f','%f','%s','%f','%f','%d','%d','%f','%d'];
 
   if ($id > 0) {
     $ok = $wpdb->update($table, $data, ['id' => $id], $formats, ['%d']);
     if ($ok === false) wp_send_json_error(['message' => 'No se pudo actualizar']);
-    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, rol, area, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $id), ARRAY_A);
+    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, rol, participacion, area, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $id), ARRAY_A);
     wp_send_json_success(['row' => $row]);
   } else {
     $ok = $wpdb->insert($table, $data, $formats);
     if (!$ok) wp_send_json_error(['message' => 'No se pudo insertar']);
     $new_id = intval($wpdb->insert_id);
-    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, rol, area, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $new_id), ARRAY_A);
+    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, rol, participacion, area, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $new_id), ARRAY_A);
     wp_send_json_success(['row' => $row]);
   }
 }

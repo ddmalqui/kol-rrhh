@@ -19,6 +19,27 @@ const KOL_RRHH_ROLES = [
   'Responsable pedidos','Responsable stock'
 ];
 
+  function buildParticipacionOptions(){
+    const opts = [];
+    for (let v = 0; v <= 10.0001; v += 0.5) {
+      const value = v.toFixed(1);
+      const label = value.replace('.', ',');
+      opts.push(`<option value="${value}">${label}</option>`);
+    }
+    return `<option value="0.0">0,0</option>` + opts.slice(1).join('');
+  }
+
+  function normalizeParticipacion(v){
+    const n = parseFloat(String(v ?? '0').replace(',', '.'));
+    if (isNaN(n)) return '0.0';
+    const clamped = Math.max(0, Math.min(10, n));
+    return clamped.toFixed(1);
+  }
+
+  function formatParticipacionAR(v){
+    return normalizeParticipacion(v).replace('.', ',');
+  }
+
 
   function qs(id) { return document.getElementById(id); }
 
@@ -969,7 +990,8 @@ if (desempenoSaveBtn) {
     setVal('kolrrhh-sueldo-periodo-inicio', row?.periodo_inicio || '');
     setVal('kolrrhh-sueldo-periodo-fin', row?.periodo_fin || '');
     const rolSel = qs('kolrrhh-sueldo-rol');
-const areaSel = qs('kolrrhh-sueldo-area');
+    const areaSel = qs('kolrrhh-sueldo-area');
+    const partSel = qs('kolrrhh-sueldo-participacion');
 
 if (rolSel) {
   rolSel.innerHTML = `<option value="">Seleccionar rol</option>` +
@@ -985,6 +1007,11 @@ if (areaSel) {
       `<option value="${a}">${a}</option>`
     ).join('');
   areaSel.value = row?.area || '';
+}
+
+if (partSel) {
+  partSel.innerHTML = buildParticipacionOptions();
+  partSel.value = normalizeParticipacion(row?.participacion ?? '0');
 }
 
     setVal('kolrrhh-sueldo-jornada', row?.jornada || '');
@@ -1065,7 +1092,7 @@ if (areaSel) {
     setVal('kolrrhh-sueldo-area', '');
 
 
-    ['kolrrhh-sueldo-periodo-inicio','kolrrhh-sueldo-periodo-fin','kolrrhh-sueldo-rol','kolrrhh-sueldo-jornada',
+    ['kolrrhh-sueldo-periodo-inicio','kolrrhh-sueldo-periodo-fin','kolrrhh-sueldo-rol','kolrrhh-sueldo-participacion','kolrrhh-sueldo-jornada',
      'kolrrhh-sueldo-efectivo','kolrrhh-sueldo-transferencia','kolrrhh-sueldo-creditos','kolrrhh-sueldo-bono','kolrrhh-sueldo-descuentos','kolrrhh-sueldo-liquidacion',
      'kolrrhh-sueldo-vac-tomadas','kolrrhh-sueldo-feriados','kolrrhh-sueldo-vac-no-tomadas'
     ].forEach(id => setVal(id, ''));
@@ -1104,6 +1131,7 @@ if (areaSel) {
       const b = dateBadgeParts(r.periodo_fin);
       const rol = (r.rol || '—').toString().toUpperCase();
       const area = r.area ? r.area : '—';
+      const part = formatParticipacionAR(r.participacion ?? '0');
 
       return `
         <div class="kolrrhh-sueldo-card" data-sueldo-id="${r.id}">
@@ -1124,7 +1152,7 @@ if (areaSel) {
 
         <div class="kolrrhh-sueldo-role">
   <div class="kolrrhh-sueldo-area">${escapeHtml(area)}</div>
-  <div class="kolrrhh-sueldo-cargo">${escapeHtml(rol)}</div>
+  <div class="kolrrhh-sueldo-cargo">${escapeHtml(rol)} <span class="kolrrhh-sueldo-part">${escapeHtml(part)}</span></div>
 </div>
 
 
@@ -1680,6 +1708,7 @@ body.set('clover_employee_id', clover_employee_id);
         payload.set('periodo_inicio', periodo_inicio);
         payload.set('periodo_fin', periodo_fin);
         payload.set('rol', getVal('kolrrhh-sueldo-rol'));
+        payload.set('participacion', getVal('kolrrhh-sueldo-participacion') || '0.0');
         payload.set('area', getVal('kolrrhh-sueldo-area'));
         payload.set('jornada', getVal('kolrrhh-sueldo-jornada'));
 

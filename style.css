@@ -857,6 +857,15 @@
   font-weight: 950;
   letter-spacing: .06em;
 }
+
+.kolrrhh-sueldo-part{
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 900;
+  opacity: .75;
+  letter-spacing: .04em;
+}
 .kolrrhh-form-field select.kolrrhh-modal-input{
   appearance: none;
   background-image:
@@ -983,4 +992,3 @@
 .sign {
   margin-top: 200px;
 }
-
