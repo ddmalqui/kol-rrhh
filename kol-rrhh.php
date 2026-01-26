@@ -32,12 +32,28 @@ final class KOL_RRHH_Plugin {
     $base = plugin_dir_url(__FILE__);
     wp_register_style('kol-rrhh-style', $base.'style.css', [], self::VERSION);
     wp_register_script('kol-rrhh-js', $base.'rrhh.js', ['jquery'], self::VERSION, true);
-    wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
-      'ajaxurl' => admin_url('admin-ajax.php'),
-      'nonce'   => wp_create_nonce('kol_rrhh_nonce'),
-      // Mapa MerchantID -> Nombre amigable (para el select de Comercio en Fichaje)
-      'merchant_map' => $this->get_clover_merchant_map(),
-    ]);
+    global $wpdb;
+
+/* Locales */
+$locales = $wpdb->get_col("
+  SELECT nombre 
+  FROM wp_kol_locales
+  ORDER BY nombre
+");
+
+/* Áreas */
+$areas = $wpdb->get_col("
+  SELECT nombre
+  FROM wp_kol_areas
+  ORDER BY nombre
+");
+
+wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
+  'ajaxurl' => admin_url('admin-ajax.php'),
+  'nonce'   => wp_create_nonce('kol_rrhh_nonce'),
+  'locales' => $locales ?: [],
+  'areas'   => $areas ?: [],
+]);
 
   }
 

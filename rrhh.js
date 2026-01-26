@@ -6,12 +6,6 @@
   let __CURRENT_CLOVER_ID__ = '';
   let __CURRENT_CLOVER_PAIRS__ = [];
 
-
-  const KOL_RRHH_AREAS = [
-  'Local 55','Local 15','Local 34','Sh','Urb','Osi','Sol',
-  'Deposito','Administracion','Redes','Entrenamiento'
-];
-
 const KOL_RRHH_ROLES = [
   'Auxiliar','Vendedor','Responsable vendedor','Responsable Global',
   'Responsable del local','Administracion','Tecnico','Redes',
@@ -1002,12 +996,23 @@ if (rolSel) {
 }
 
 if (areaSel) {
-  areaSel.innerHTML = `<option value="">Seleccionar área / local</option>` +
-    KOL_RRHH_AREAS.map(a =>
-      `<option value="${a}">${a}</option>`
+  const locales = (KOL_RRHH.locales || []);
+  const areas   = (KOL_RRHH.areas || []);
+
+  const opciones = [
+    ...locales.map(l => ({ value: l, label: l })),
+    ...areas.map(a => ({ value: a, label: a }))
+  ];
+
+  areaSel.innerHTML =
+    `<option value="">Seleccionar área / local</option>` +
+    opciones.map(o =>
+      `<option value="${o.value}">${o.label}</option>`
     ).join('');
+
   areaSel.value = row?.area || '';
 }
+
 
 if (partSel) {
   partSel.innerHTML = buildParticipacionOptions();
