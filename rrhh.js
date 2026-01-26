@@ -1028,14 +1028,16 @@ if (partSel) {
     setVal('kolrrhh-sueldo-descuentos', row?.descuentos ?? '');
     setVal('kolrrhh-sueldo-liquidacion', row?.liquidacion ?? '');
 
-    setVal('kolrrhh-sueldo-vac-tomadas', row?.vac_tomadas ?? 0);
-    setVal('kolrrhh-sueldo-feriados', row?.feriados ?? 0);
-    setVal('kolrrhh-sueldo-vac-no-tomadas', row?.vac_no_tomadas ?? 0);
+    setVal('kolrrhh-sueldo-vac-tomadas', row?.vac_tomadas ?? '');
+    setVal('kolrrhh-sueldo-feriados', row?.feriados ??'');
+    setVal('kolrrhh-sueldo-vac-no-tomadas', row?.vac_no_tomadas ?? '');
     
 
 
     // money formatting (en blur ya se formatea)
-    ['kolrrhh-sueldo-efectivo','kolrrhh-sueldo-transferencia','kolrrhh-sueldo-creditos','kolrrhh-sueldo-bono','kolrrhh-sueldo-descuentos','kolrrhh-sueldo-liquidacion']
+    ['kolrrhh-sueldo-jornada','kolrrhh-sueldo-vac-tomadas','kolrrhh-sueldo-feriados','kolrrhh-sueldo-vac-no-tomadas',
+      'kolrrhh-sueldo-efectivo','kolrrhh-sueldo-transferencia','kolrrhh-sueldo-creditos',
+      'kolrrhh-sueldo-bono','kolrrhh-sueldo-descuentos','kolrrhh-sueldo-liquidacion']
       .forEach(id => {
         const el = qs(id);
         if (el) { attachMoneyInput(el); el.dispatchEvent(new Event('blur')); }
@@ -1205,13 +1207,13 @@ if (partSel) {
               </thead>
               <tbody>
                 <tr>
-                  <td>${escapeHtml(r.jornada || '—')}</td>
+                  <td>${escapeHtml(r.jornada)}</td>
                   <td>${moneyAR(r.bono)}</td>
                   <td>${moneyAR(r.descuentos)}</td>
-                  <td>${Number(r.vac_tomadas || 0)}</td>
-                  <td>${Number(r.feriados || 0)}</td>
+                  <td>${moneyAR(r.vac_tomadas)}</td>
+                  <td>${moneyAR(r.feriados)}</td>
                   <td>${moneyAR(r.liquidacion)}</td>
-                  <td>${Number(r.vac_no_tomadas || 0)}</td>
+                  <td>${moneyAR(r.vac_no_tomadas)}</td>
                 </tr>
               </tbody>
             </table>

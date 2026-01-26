@@ -477,7 +477,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
       <div class="kolrrhh-form-row" style="--cols:4;">
         <div class="kolrrhh-form-field">
           <label class="kolrrhh-modal-label">Jornada</label>
-          <input id="kolrrhh-sueldo-jornada" type="text" class="kolrrhh-modal-input" maxlength="80" placeholder="Ej: Completa / Media" />
+          <input id="kolrrhh-sueldo-jornada" type="text" class="kolrrhh-modal-input kolrrhh-money" maxlength="80" placeholder="Ej: Completa / Media" />
         </div>
         <div class="kolrrhh-form-field">
           <label class="kolrrhh-modal-label">Bono</label>
@@ -489,14 +489,14 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
         </div>
         <div class="kolrrhh-form-field">
           <label class="kolrrhh-modal-label">Vac. tomadas</label>
-          <input id="kolrrhh-sueldo-vac-tomadas" type="number" min="0" step="1" class="kolrrhh-modal-input" />
+          <input id="kolrrhh-sueldo-vac-tomadas" type="text" inputmode="decimal" class="kolrrhh-modal-input kolrrhh-money" />
         </div>
       </div>
 
       <div class="kolrrhh-form-row" style="--cols:3;">
         <div class="kolrrhh-form-field">
           <label class="kolrrhh-modal-label">Feriados</label>
-          <input id="kolrrhh-sueldo-feriados" type="number" min="0" step="1" class="kolrrhh-modal-input" />
+          <input id="kolrrhh-sueldo-feriados" type="text" inputmode="decimal" class="kolrrhh-modal-input kolrrhh-money" />
         </div>
         <div class="kolrrhh-form-field">
           <label class="kolrrhh-modal-label">Liquidación</label>
@@ -504,7 +504,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
         </div>
         <div class="kolrrhh-form-field">
           <label class="kolrrhh-modal-label">Vac. no tomadas</label>
-          <input id="kolrrhh-sueldo-vac-no-tomadas" type="number" min="0" step="1" class="kolrrhh-modal-input" />
+          <input id="kolrrhh-sueldo-vac-no-tomadas" type="text" inputmode="decimal" class="kolrrhh-modal-input kolrrhh-money" />
         </div>
       </div>
     </div>
@@ -858,7 +858,6 @@ if (!$rol || !$area) {
   if ($participacion > 10) $participacion = 10;
 
   $area = isset($_POST['area']) ? sanitize_text_field($_POST['area']) : '';
-  $jornada  = isset($_POST['jornada']) ? sanitize_text_field($_POST['jornada']) : '';
 
   // Dinero: viene como string, convertimos a número (float)
   $to_num = function($v){
@@ -877,9 +876,10 @@ if (!$rol || !$area) {
   $descuentos    = $to_num($_POST['descuentos'] ?? '');
   $liquidacion   = $to_num($_POST['liquidacion'] ?? '');
 
-  $vac_tomadas      = isset($_POST['vac_tomadas']) ? intval($_POST['vac_tomadas']) : 0;
-  $feriados         = isset($_POST['feriados']) ? intval($_POST['feriados']) : 0;
-  $vac_no_tomadas   = isset($_POST['vac_no_tomadas']) ? intval($_POST['vac_no_tomadas']) : 0;
+  $jornada  = $to_num($_POST['jornada'] ?? '');
+  $vac_tomadas      = $to_num($_POST['vac_tomadas'] ?? '');
+  $feriados         = $to_num($_POST['feriados'] ?? '');
+  $vac_no_tomadas   = $to_num($_POST['vac_no_tomadas'] ?? '');
 
   global $wpdb;
   $table = $this->sueldos_items_table();
@@ -1718,7 +1718,7 @@ private function render_print_html($d){
         </thead>
         <tbody>
           <?php
-            echo $maybeRow('Jornada', $row['jornada'] ?? '');
+            echo $maybeRow('Jornada', $row['jornada'] ?? 0);
             echo $maybeRow('Bono', $row['bono'] ?? 0);
             echo $maybeRow('Descuentos', $row['descuentos'] ?? 0);
             echo $maybeRow('Vac. tomadas', $row['vac_tomadas'] ?? 0);
