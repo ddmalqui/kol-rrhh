@@ -460,10 +460,10 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
       </div>
 
       <div class="kolrrhh-form-row" style="--cols:3;">
-        <div class="kolrrhh-form-field">
-          <label class="kolrrhh-modal-label">Efectivo</label>
-          <input id="kolrrhh-sueldo-efectivo" type="text" inputmode="decimal" class="kolrrhh-modal-input kolrrhh-money" />
-        </div>
+      <div class="kolrrhh-form-field">
+        <label class="kolrrhh-modal-label">Efectivo</label>
+        <input id="kolrrhh-sueldo-efectivo" type="text" inputmode="decimal" class="kolrrhh-modal-input kolrrhh-money" readonly />
+      </div>
         <div class="kolrrhh-form-field">
           <label class="kolrrhh-modal-label">Transferencia</label>
           <input id="kolrrhh-sueldo-transferencia" type="text" inputmode="decimal" class="kolrrhh-modal-input kolrrhh-money" />

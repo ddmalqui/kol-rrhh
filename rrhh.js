@@ -1041,6 +1041,7 @@ if (partSel) {
       .forEach(id => {
         const el = qs(id);
         if (el) { attachMoneyInput(el); el.dispatchEvent(new Event('blur')); }
+        calcularEfectivoAutomatico();
       });
 
     clearSueldoError();
@@ -1580,9 +1581,9 @@ if (partSel) {
           body.set('estado', estado);
           body.set('cbu', cbu);
           let clover_employee_id = (qs('kolrrhh-modal-clover_employee_id')?.value || '').trim();
-clover_employee_id = clover_employee_id.replace(/\s*,\s*/g, ','); // opcional, mismo criterio que en PHP
+          clover_employee_id = clover_employee_id.replace(/\s*,\s*/g, ','); // opcional, mismo criterio que en PHP
 
-body.set('clover_employee_id', clover_employee_id);
+          body.set('clover_employee_id', clover_employee_id);
 
           const res = await fetch(KOL_RRHH.ajaxurl, {
             method: 'POST',
@@ -1762,4 +1763,69 @@ body.set('clover_employee_id', clover_employee_id);
                   document.querySelector('#kolrrhh-list-otros .kolrrhh-item');
     if (first) first.click();
   });
+
+ /* === LÓGICA DE CÁLCULO AUTOMÁTICO DE EFECTIVO === */
+
+// 1. Esta función limpia los puntos y comas para que se puedan sumar
+function limpiarMontoKOL(id) {
+  const el = document.getElementById(id);
+  if (!el || !el.value) return 0;
+
+  let v = String(el.value);
+
+  // sacar $ y espacios
+  v = v.replace(/\$/g, '').replace(/\s/g, '');
+
+  // sacar separadores de miles y normalizar decimal
+  v = v.replace(/\./g, '').replace(',', '.');
+
+  // dejar sólo dígitos, signo menos y punto decimal
+  v = v.replace(/[^0-9.-]/g, '');
+
+  const n = parseFloat(v);
+  return isNaN(n) ? 0 : n;
+}
+
+// 2. La función principal que hace la cuenta
+function calcularEfectivoAutomatico() {
+    // Sumas (Haberes)
+    const jornada     = limpiarMontoKOL('kolrrhh-sueldo-jornada');
+    const bono        = limpiarMontoKOL('kolrrhh-sueldo-bono');
+    const vacTomadas  = limpiarMontoKOL('kolrrhh-sueldo-vac-tomadas');
+    const feriados    = limpiarMontoKOL('kolrrhh-sueldo-feriados');
+    const liquidacion = limpiarMontoKOL('kolrrhh-sueldo-liquidacion');
+    const vacNoTom    = limpiarMontoKOL('kolrrhh-sueldo-vac-no-tomadas');
+
+    // Restas (Deducciones / Otros pagos)
+    const descuentos  = limpiarMontoKOL('kolrrhh-sueldo-descuentos');
+    const trans       = limpiarMontoKOL('kolrrhh-sueldo-transferencia');
+    const creditos    = limpiarMontoKOL('kolrrhh-sueldo-creditos');
+
+    // FÓRMULA SOLICITADA
+    const total = (jornada + bono + vacTomadas + feriados + liquidacion + vacNoTom) - (descuentos + trans + creditos);
+
+    const campoEfectivo = document.getElementById('kolrrhh-sueldo-efectivo');
+    if (campoEfectivo) {
+        // Formateamos el resultado para que coincida con el resto (Ej: 1.500,50)
+        campoEfectivo.value = total.toLocaleString('es-AR', { 
+            minimumFractionDigits: 2, 
+            maximumFractionDigits: 2 
+        });
+    }
+}
+
+// 3. Escuchamos los cambios en todos los campos involucrados
+const idsInputsSueldo = [
+    'kolrrhh-sueldo-jornada', 'kolrrhh-sueldo-bono', 'kolrrhh-sueldo-descuentos',
+    'kolrrhh-sueldo-vac-tomadas', 'kolrrhh-sueldo-feriados', 'kolrrhh-sueldo-liquidacion',
+    'kolrrhh-sueldo-vac-no-tomadas', 'kolrrhh-sueldo-transferencia', 'kolrrhh-sueldo-creditos'
+];
+
+idsInputsSueldo.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+        // Usamos 'input' para que el cálculo sea instantáneo al escribir
+        el.addEventListener('input', calcularEfectivoAutomatico);
+    }
+});
 })();
