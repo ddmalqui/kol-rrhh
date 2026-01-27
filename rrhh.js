@@ -992,6 +992,7 @@ if (desempenoSaveBtn) {
     const rolSel = qs('kolrrhh-sueldo-rol');
     const areaSel = qs('kolrrhh-sueldo-area');
     const partSel = qs('kolrrhh-sueldo-participacion');
+    const horasSel = qs('kolrrhh-sueldo-horas');
 
 if (rolSel) {
   rolSel.innerHTML = `<option value="">Seleccionar rol</option>` +
@@ -1017,6 +1018,18 @@ if (areaSel) {
     ).join('');
 
   areaSel.value = row?.area || '';
+}
+
+
+
+if (horasSel) {
+  const bandas = (KOL_RRHH.horas_bandas || []);
+  horasSel.innerHTML =
+    `<option value="">Seleccionar horas</option>` +
+    bandas.map(b =>
+      `<option value="${b.value}">${b.label}</option>`
+    ).join('');
+  horasSel.value = row?.horas ? String(row.horas) : '';
 }
 
 
@@ -1730,6 +1743,7 @@ if (partSel) {
         payload.set('periodo_inicio', periodo_inicio);
         payload.set('periodo_fin', periodo_fin);
         payload.set('rol', getVal('kolrrhh-sueldo-rol'));
+        payload.set('horas', getVal('kolrrhh-sueldo-horas'));
         payload.set('participacion', getVal('kolrrhh-sueldo-participacion') || '0.0');
         payload.set('area', getVal('kolrrhh-sueldo-area'));
         payload.set('jornada', getVal('kolrrhh-sueldo-jornada'));

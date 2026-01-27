@@ -48,11 +48,35 @@ $areas = $wpdb->get_col("
   ORDER BY nombre
 ");
 
+/* Horas (bandas) */
+$horas_bandas = [];
+$horas_table = $wpdb->prefix . 'kol_rrhh_horas_bandas';
+$exists_horas = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $horas_table));
+if ($exists_horas === $horas_table) {
+  $cols_h = $wpdb->get_col("SHOW COLUMNS FROM {$horas_table}", 0);
+  $cols_h = is_array($cols_h) ? $cols_h : [];
+
+  $colHoras = in_array('horas', $cols_h, true) ? 'horas' : (in_array('cantidad', $cols_h, true) ? 'cantidad' : '');
+  $colNombre = in_array('nombre', $cols_h, true) ? 'nombre' : (in_array('descripcion', $cols_h, true) ? 'descripcion' : '');
+
+  if ($colHoras !== '') {
+    $select = "SELECT {$colHoras} AS horas" . ($colNombre ? ", {$colNombre} AS nombre" : "") . " FROM {$horas_table} ORDER BY {$colHoras} ASC";
+    $rows_h = $wpdb->get_results($select, ARRAY_A) ?: [];
+    foreach ($rows_h as $r) {
+      $h = isset($r['horas']) ? trim((string)$r['horas']) : '';
+      if ($h === '') continue;
+      $label = isset($r['nombre']) && trim((string)$r['nombre']) !== '' ? trim((string)$r['nombre']) : ($h . ' hs');
+      $horas_bandas[] = ['value' => $h, 'label' => $label];
+    }
+  }
+}
+
 wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
   'ajaxurl' => admin_url('admin-ajax.php'),
   'nonce'   => wp_create_nonce('kol_rrhh_nonce'),
   'locales' => $locales ?: [],
   'areas'   => $areas ?: [],
+  'horas_bandas' => $horas_bandas ?: [],
 ]);
 
   }
@@ -434,7 +458,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
       <input type="hidden" id="kolrrhh-sueldo-id" value="0" />
       <input type="hidden" id="kolrrhh-sueldo-legajo" value="" />
 
-<div class="kolrrhh-form-row" style="--cols:5;">
+<div class="kolrrhh-form-row" style="--cols:6;">
         <div class="kolrrhh-form-field">
           <label class="kolrrhh-modal-label">Fecha inicio *</label>
           <input id="kolrrhh-sueldo-periodo-inicio" type="date" class="kolrrhh-modal-input" />
@@ -451,6 +475,12 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
 <div class="kolrrhh-form-field">
   <label class="kolrrhh-modal-label">Rol</label>
   <select id="kolrrhh-sueldo-rol" class="kolrrhh-modal-input"></select>
+</div>
+
+
+<div class="kolrrhh-form-field">
+  <label class="kolrrhh-modal-label">Horas</label>
+  <select id="kolrrhh-sueldo-horas" class="kolrrhh-modal-input"></select>
 </div>
 
 <div class="kolrrhh-form-field">
@@ -478,7 +508,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
 
       <div class="kolrrhh-modal-section-title">Detalles</div>
 
-      <div class="kolrrhh-form-row" style="--cols:7;">
+      <div class="kolrrhh-form-row" style="--cols:4;">
         <div class="kolrrhh-form-field">
           <label class="kolrrhh-modal-label">Jornada</label>
           <input id="kolrrhh-sueldo-jornada" type="text" class="kolrrhh-modal-input kolrrhh-money" maxlength="80" placeholder="Ej: Completa / Media" />
@@ -495,7 +525,10 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
           <label class="kolrrhh-modal-label">Vac. tomadas</label>
           <input id="kolrrhh-sueldo-vac-tomadas" type="text" inputmode="decimal" class="kolrrhh-modal-input kolrrhh-money" />
         </div>
-         <div class="kolrrhh-form-field">
+      </div>
+
+      <div class="kolrrhh-form-row" style="--cols:3;">
+        <div class="kolrrhh-form-field">
           <label class="kolrrhh-modal-label">Feriados</label>
           <input id="kolrrhh-sueldo-feriados" type="text" inputmode="decimal" class="kolrrhh-modal-input kolrrhh-money" />
         </div>
@@ -504,10 +537,11 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
           <input id="kolrrhh-sueldo-liquidacion" type="text" inputmode="decimal" class="kolrrhh-modal-input kolrrhh-money" />
         </div>
         <div class="kolrrhh-form-field">
-          <label class="kolrrhh-modal-label">Vac. no tom</label>
+          <label class="kolrrhh-modal-label">Vac. no tomadas</label>
           <input id="kolrrhh-sueldo-vac-no-tomadas" type="text" inputmode="decimal" class="kolrrhh-modal-input kolrrhh-money" />
         </div>
       </div>
+
 
       <div class="kolrrhh-form-row" style="--cols:6;">
         <div class="kolrrhh-form-field">
@@ -634,7 +668,7 @@ public function ajax_get_sueldo_items(){
 
   $rows = $wpdb->get_results(
     $wpdb->prepare(
-      "SELECT id, legajo, periodo_inicio, periodo_fin, area, rol, participacion,
+      "SELECT id, legajo, periodo_inicio, periodo_fin, area, rol, participacion, horas,
               efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas
        FROM {$table}
        WHERE legajo = %d
@@ -887,6 +921,11 @@ if (!$rol || !$area) {
 
   $area = isset($_POST['area']) ? sanitize_text_field($_POST['area']) : '';
 
+  $horas_raw = sanitize_text_field($_POST['horas'] ?? '');
+  $horas_raw = str_replace(',', '.', $horas_raw);
+  $horas = floatval($horas_raw);
+  if ($horas < 0) $horas = 0;
+
   // Dinero: viene como string, convertimos a número (float)
   $to_num = function($v){
     $v = is_string($v) ? $v : '';
@@ -924,6 +963,7 @@ if (!$rol || !$area) {
     'rol' => $rol,
     'participacion' => $participacion,
     'area' => $area,
+    'horas' => $horas,
     'efectivo' => $efectivo,
     'transferencia' => $transferencia,
     'creditos' => $creditos,
@@ -935,18 +975,18 @@ if (!$rol || !$area) {
     'liquidacion' => $liquidacion,
     'vac_no_tomadas' => $vac_no_tomadas
   ];
-$formats = ['%d','%s','%s','%s','%f','%s','%f','%f','%f','%s','%f','%f','%d','%d','%f','%d'];
+$formats = ['%d','%s','%s','%s','%f','%s','%f','%f','%f','%f','%s','%f','%f','%d','%d','%f','%d'];
 
   if ($id > 0) {
     $ok = $wpdb->update($table, $data, ['id' => $id], $formats, ['%d']);
     if ($ok === false) wp_send_json_error(['message' => 'No se pudo actualizar']);
-    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, rol, participacion, area, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $id), ARRAY_A);
+    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, rol, participacion, area, horas, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $id), ARRAY_A);
     wp_send_json_success(['row' => $row]);
   } else {
     $ok = $wpdb->insert($table, $data, $formats);
     if (!$ok) wp_send_json_error(['message' => 'No se pudo insertar']);
     $new_id = intval($wpdb->insert_id);
-    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, rol, participacion, area, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $new_id), ARRAY_A);
+    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, rol, participacion, area, horas, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $new_id), ARRAY_A);
     wp_send_json_success(['row' => $row]);
   }
 }
