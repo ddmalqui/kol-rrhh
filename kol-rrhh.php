@@ -459,6 +459,8 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
 </div>
       </div>
 
+      <div class="kolrrhh-modal-section-title">Modo de Pago</div>
+
       <div class="kolrrhh-form-row" style="--cols:3;">
       <div class="kolrrhh-form-field">
         <label class="kolrrhh-modal-label">Efectivo</label>
@@ -474,7 +476,9 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
         </div>
       </div>
 
-      <div class="kolrrhh-form-row" style="--cols:4;">
+      <div class="kolrrhh-modal-section-title">Detalles</div>
+
+      <div class="kolrrhh-form-row" style="--cols:7;">
         <div class="kolrrhh-form-field">
           <label class="kolrrhh-modal-label">Jornada</label>
           <input id="kolrrhh-sueldo-jornada" type="text" class="kolrrhh-modal-input kolrrhh-money" maxlength="80" placeholder="Ej: Completa / Media" />
@@ -491,10 +495,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
           <label class="kolrrhh-modal-label">Vac. tomadas</label>
           <input id="kolrrhh-sueldo-vac-tomadas" type="text" inputmode="decimal" class="kolrrhh-modal-input kolrrhh-money" />
         </div>
-      </div>
-
-      <div class="kolrrhh-form-row" style="--cols:3;">
-        <div class="kolrrhh-form-field">
+         <div class="kolrrhh-form-field">
           <label class="kolrrhh-modal-label">Feriados</label>
           <input id="kolrrhh-sueldo-feriados" type="text" inputmode="decimal" class="kolrrhh-modal-input kolrrhh-money" />
         </div>
@@ -503,8 +504,35 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
           <input id="kolrrhh-sueldo-liquidacion" type="text" inputmode="decimal" class="kolrrhh-modal-input kolrrhh-money" />
         </div>
         <div class="kolrrhh-form-field">
-          <label class="kolrrhh-modal-label">Vac. no tomadas</label>
+          <label class="kolrrhh-modal-label">Vac. no tom</label>
           <input id="kolrrhh-sueldo-vac-no-tomadas" type="text" inputmode="decimal" class="kolrrhh-modal-input kolrrhh-money" />
+        </div>
+      </div>
+
+      <div class="kolrrhh-form-row" style="--cols:6;">
+        <div class="kolrrhh-form-field">
+          <label class="kolrrhh-modal-label">Base</label>
+          <div id="kolrrhh-sueldo-base" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
+        </div>
+        <div class="kolrrhh-form-field">
+          <label class="kolrrhh-modal-label">Antig.</label>
+          <div id="kolrrhh-sueldo-antig" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
+        </div>
+        <div class="kolrrhh-form-field">
+          <label class="kolrrhh-modal-label">Comisión</label>
+          <div id="kolrrhh-sueldo-comision" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
+        </div>
+        <div class="kolrrhh-form-field">
+          <label class="kolrrhh-modal-label">Presentismo</label>
+          <div id="kolrrhh-sueldo-presentismo" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
+        </div>
+        <div class="kolrrhh-form-field">
+          <label class="kolrrhh-modal-label">Desempeño</label>
+          <div id="kolrrhh-sueldo-desempeno" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
+        </div>
+        <div class="kolrrhh-form-field">
+          <label class="kolrrhh-modal-label">No remunerativo</label>
+          <div id="kolrrhh-sueldo-no-rem" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
       </div>
     </div>

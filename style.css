@@ -657,6 +657,19 @@
 
 
 /* === SUELDO modal / form === */
+/* Section titles inside modal (reusa estilo de secciones) */
+.kolrrhh-modal-section-title{
+  font-weight:800;
+  font-size:13px;
+  margin: 6px 0 10px;
+  opacity:.7;
+  text-transform:uppercase;
+}
+.kolrrhh-modal-value{
+  background: rgba(0,0,0,.03);
+  font-weight:900;
+  text-align:center;
+}
 .kolrrhh-modal-card-wide{ max-width: 850px; }
 .kolrrhh-form-grid{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
 @media (max-width: 720px){ .kolrrhh-form-grid{ grid-template-columns: 1fr; } }

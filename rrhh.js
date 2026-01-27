@@ -37,6 +37,12 @@ const KOL_RRHH_ROLES = [
 
   function qs(id) { return document.getElementById(id); }
 
+  function setText(id, v){
+    const el = qs(id);
+    if (!el) return;
+    el.textContent = (v === null || v === undefined) ? '' : String(v);
+  }
+
   function setVal(id, v){
     const el = qs(id);
     if (!el) return;
@@ -1044,6 +1050,10 @@ if (partSel) {
         calcularEfectivoAutomatico();
       });
 
+    // reset labels calculados (UI)
+    ['kolrrhh-sueldo-base','kolrrhh-sueldo-antig','kolrrhh-sueldo-comision','kolrrhh-sueldo-presentismo','kolrrhh-sueldo-desempeno','kolrrhh-sueldo-no-rem']
+      .forEach(id => setText(id, '$0'));
+
     clearSueldoError();
 
     modal.classList.add('is-open');
@@ -1104,6 +1114,10 @@ if (partSel) {
      'kolrrhh-sueldo-efectivo','kolrrhh-sueldo-transferencia','kolrrhh-sueldo-creditos','kolrrhh-sueldo-bono','kolrrhh-sueldo-descuentos','kolrrhh-sueldo-liquidacion',
      'kolrrhh-sueldo-vac-tomadas','kolrrhh-sueldo-feriados','kolrrhh-sueldo-vac-no-tomadas'
     ].forEach(id => setVal(id, ''));
+
+    // reset labels calculados
+    ['kolrrhh-sueldo-base','kolrrhh-sueldo-antig','kolrrhh-sueldo-comision','kolrrhh-sueldo-presentismo','kolrrhh-sueldo-desempeno','kolrrhh-sueldo-no-rem']
+      .forEach(id => setText(id, '$0'));
 
     clearSueldoError();
 
