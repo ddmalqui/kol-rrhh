@@ -37,6 +37,58 @@ const KOL_RRHH_ROLES = [
 
   function qs(id) { return document.getElementById(id); }
 
+  function formatMoneyKOL(n){
+    const num = Number(n);
+    if (!isFinite(num)) return '$0';
+    // si es entero, sin decimales, sino 2 decimales
+    const isInt = Math.abs(num - Math.round(num)) < 0.0000001;
+    const parts = (isInt ? String(Math.round(num)) : num.toFixed(2))
+      .replace('.', ',')
+      .replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return '$' + parts;
+  }
+
+  async function refreshBaseFromDB(){
+    const rol = getVal('kolrrhh-sueldo-rol');
+    const horas = getVal('kolrrhh-sueldo-horas');
+    const out = qs('kolrrhh-sueldo-base');
+    if (!out) return;
+
+    if (!rol || !horas) {
+      out.textContent = '$0';
+      return;
+    }
+    if (typeof KOL_RRHH === 'undefined' || !KOL_RRHH.ajaxurl) {
+      out.textContent = '$0';
+      return;
+    }
+    try{
+      const body = new URLSearchParams();
+      body.set('action','kol_rrhh_get_base');
+      body.set('nonce', KOL_RRHH.nonce);
+      body.set('rol', rol);
+      body.set('horas', horas);
+
+      const res = await fetch(KOL_RRHH.ajaxurl, {
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'},
+        body: body.toString()
+      });
+      const json = await res.json();
+      if (!json || !json.success){
+        out.textContent = '$0';
+        return;
+      }
+      const monto = json?.data?.monto;
+      out.textContent = (monto === null || monto === undefined) ? '$0' : formatMoneyKOL(monto);
+    }catch(e){
+      console.error('refreshBaseFromDB', e);
+      out.textContent = '$0';
+    }
+  }
+
+
+
   function setText(id, v){
     const el = qs(id);
     if (!el) return;
@@ -1030,6 +1082,14 @@ if (horasSel) {
       `<option value="${b.value}">${b.label}</option>`
     ).join('');
   horasSel.value = row?.horas ? String(row.horas) : '';
+
+  // actualizar BASE desde la tabla basicos (rol + horas)
+  setTimeout(refreshBaseFromDB, 0);
+
+  // listeners (evitar duplicados)
+  if (rolSel) rolSel.onchange = refreshBaseFromDB;
+  if (horasSel) horasSel.onchange = refreshBaseFromDB;
+
 }
 
 
