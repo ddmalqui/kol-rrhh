@@ -13,6 +13,7 @@
   let __CURRENT_LEGAJO__ = 0;
   let __CURRENT_CLOVER_ID__ = '';
   let __CURRENT_CLOVER_PAIRS__ = [];
+  let __VIEW_MODE__ = 'employees'; // employees | locales
   let __CURRENT_ULTIMO_INGRESO__ = '';
   let __CURRENT_BASE__ = 0;
 
@@ -1657,6 +1658,16 @@ if (typeof moneyAR === 'function'){
     // Click on employee item => render detail
     const btn = e.target.closest('.kolrrhh-item');
     if (btn) {
+      // ✅ Si estamos en la vista "Locales", al seleccionar un empleado volvemos
+      // automáticamente a la vista normal (tabs + panes).
+      if (__VIEW_MODE__ === 'locales') {
+        __VIEW_MODE__ = 'employees';
+        const tabs = document.querySelector('.kolrrhh-tabs');
+        const panes = document.querySelector('.kolrrhh-tabpanes');
+        if (tabs) tabs.classList.remove('kolrrhh-hidden');
+        if (panes) panes.classList.remove('kolrrhh-hidden');
+      }
+
       document.querySelectorAll('.kolrrhh-item.is-selected').forEach(x => x.classList.remove('is-selected'));
       btn.classList.add('is-selected');
 
@@ -1707,6 +1718,80 @@ if (typeof moneyAR === 'function'){
         openEmpModal('add', null);
       });
     }
+
+    // === LOCALES: botón en el header izquierdo ===
+    const localesBtn = qs('kolrrhh-open-locales');
+
+    function toggleTabs(show){
+      const tabs = document.querySelector('.kolrrhh-tabs');
+      const panes = document.querySelector('.kolrrhh-tabpanes');
+      if (tabs) tabs.classList.toggle('kolrrhh-hidden', !show);
+      if (panes) panes.classList.toggle('kolrrhh-hidden', !show);
+    }
+
+    function clearEmployeeSelection(){
+      document.querySelectorAll('.kolrrhh-item.is-selected').forEach(el => el.classList.remove('is-selected'));
+    }
+
+    function renderEmptyDetail(){
+      const el = qs('kolrrhh-detail');
+      if (!el) return;
+      el.innerHTML = `
+        <div class="kolrrhh-empty">
+          <div class="kolrrhh-empty-dot"></div>
+          <div>
+            <div class="kolrrhh-empty-h">Sin selección</div>
+            <div class="kolrrhh-empty-p">Hacé click en un empleado para ver información.</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderLocalesPanel(){
+      const el = qs('kolrrhh-detail');
+      if (!el) return;
+
+      const list = (typeof KOL_RRHH !== 'undefined' && Array.isArray(KOL_RRHH.locales)) ? KOL_RRHH.locales : [];
+      const rows = (list && list.length)
+        ? list.map((name, i) => `
+            <div class="kolrrhh-locales-row">
+              <div class="kolrrhh-locales-name">${escapeHtml(String(name || '—'))}</div>
+              <div class="kolrrhh-locales-chip">LOCAL</div>
+            </div>
+          `).join('')
+        : `<div class="kolrrhh-muted" style="padding:14px;">No hay locales cargados.</div>`;
+
+      el.innerHTML = `
+        <div class="kolrrhh-locales-head">
+          <div>
+            <div class="kolrrhh-locales-title">Locales</div>
+            <div class="kolrrhh-locales-sub">Listado de locales (solo vista por ahora)</div>
+          </div>
+          <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary kolrrhh-btn-small" id="kolrrhh-locales-back">Volver</button>
+        </div>
+        <div class="kolrrhh-locales-list">${rows}</div>
+      `;
+    }
+
+    if (localesBtn) {
+      localesBtn.addEventListener('click', function(ev){
+        ev.preventDefault();
+        __VIEW_MODE__ = 'locales';
+        clearEmployeeSelection();
+        toggleTabs(false);
+        renderLocalesPanel();
+      });
+    }
+
+    // Volver desde el panel de locales
+    document.addEventListener('click', function(ev){
+      const back = ev.target.closest('#kolrrhh-locales-back');
+      if (!back) return;
+      ev.preventDefault();
+      __VIEW_MODE__ = 'employees';
+      toggleTabs(true);
+      renderEmptyDetail();
+    });
 
     // ====== INPUT GUARDS / MASKS ======
 

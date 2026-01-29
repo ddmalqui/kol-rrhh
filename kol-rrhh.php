@@ -193,6 +193,14 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
             </div>
             <div class="kolrrhh-top-actions">
               <div class="kolrrhh-badge kolrrhh-badge-green" title="Activos"><?php echo esc_html(count($activos)); ?></div>
+              <button type="button" class="kolrrhh-badge kolrrhh-store-btn" id="kolrrhh-open-locales" title="Ver locales" aria-label="Ver locales">
+                <svg class="kolrrhh-store-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M3 10h18v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V10z"></path>
+                  <path d="M4 10V6a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v4"></path>
+                  <path d="M7 21v-7h10v7"></path>
+                  <path d="M2 10h20"></path>
+                </svg>
+              </button>
               <button type="button" class="kolrrhh-badge kolrrhh-badge-green kolrrhh-add" id="kolrrhh-add" title="Agregar personal">+</button>
             </div>
           </div>

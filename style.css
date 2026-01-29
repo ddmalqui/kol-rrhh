@@ -1008,3 +1008,75 @@
 .nomodif{
   background: rgba(0,0,0,.03);
 }
+
+/* ===== Icono Locales (al lado del contador) ===== */
+.kolrrhh-store-btn{
+  cursor: pointer;
+  user-select: none;
+  background: rgba(0,0,0,.04);
+}
+.kolrrhh-store-btn:hover{ filter: brightness(0.98); }
+.kolrrhh-store-ico{
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Hide helpers */
+.kolrrhh-hidden{ display:none !important; }
+
+/* ===== Panel Locales (derecha) ===== */
+.kolrrhh-locales-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(0,0,0,.03);
+}
+.kolrrhh-locales-title{
+  font-weight: 950;
+  font-size: 18px;
+  letter-spacing: .01em;
+}
+.kolrrhh-locales-sub{
+  margin-top: 4px;
+  font-size: 12px;
+  opacity:.75;
+  font-weight: 700;
+}
+.kolrrhh-locales-list{
+  margin-top: 12px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,.06);
+  overflow:hidden;
+}
+.kolrrhh-locales-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+.kolrrhh-locales-row:last-child{ border-bottom:0; }
+.kolrrhh-locales-name{
+  font-weight: 850;
+  font-size: 14px;
+  color:#4a4a4a;
+}
+.kolrrhh-locales-chip{
+  font-size: 11px;
+  font-weight: 900;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.10);
+  background: rgba(0,0,0,.03);
+  opacity:.85;
+}
