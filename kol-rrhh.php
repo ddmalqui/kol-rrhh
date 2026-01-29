@@ -24,7 +24,7 @@ final class KOL_RRHH_Plugin {
     add_action('wp_ajax_kol_rrhh_get_fichaje_html', [$this,'ajax_get_fichaje_html']);
     add_action('wp_ajax_kol_rrhh_print_sueldo_item', [$this, 'ajax_print_sueldo_item']);
     add_action('wp_ajax_kol_rrhh_get_base', [$this,'ajax_get_base']);
-    add_action('wp_ajax_nopriv_kol_rrhh_get_base', [$this,'ajax_get_base']);
+
 
 
     add_shortcode(self::SHORTCODE, [$this,'shortcode']);
@@ -460,7 +460,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
       <input type="hidden" id="kolrrhh-sueldo-id" value="0" />
       <input type="hidden" id="kolrrhh-sueldo-legajo" value="" />
 
-<div class="kolrrhh-form-row" style="--cols:6;">
+<div class="kolrrhh-form-row" style="--cols:7;">
         <div class="kolrrhh-form-field">
           <label class="kolrrhh-modal-label">Fecha inicio *</label>
           <input id="kolrrhh-sueldo-periodo-inicio" type="date" class="kolrrhh-modal-input" />
@@ -469,7 +469,13 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
           <label class="kolrrhh-modal-label">Fecha fin *</label>
           <input id="kolrrhh-sueldo-periodo-fin" type="date" class="kolrrhh-modal-input" />
         </div>
-  <div class="kolrrhh-form-field">
+
+        <div class="kolrrhh-form-field">
+          <label class="kolrrhh-modal-label">Dias Trab.</label>
+          <input id="kolrrhh-sueldo-dias-trabajo" type="text" inputmode="decimal" class="kolrrhh-modal-input" maxlength="5" placeholder="Ej: 22,5" />
+        </div>
+
+         <div class="kolrrhh-form-field">
   <label class="kolrrhh-modal-label">Área / Local</label>
   <select id="kolrrhh-sueldo-area" class="kolrrhh-modal-input"></select>
 </div>
@@ -496,7 +502,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
       <div class="kolrrhh-form-row" style="--cols:3;">
       <div class="kolrrhh-form-field">
         <label class="kolrrhh-modal-label">Efectivo</label>
-        <input id="kolrrhh-sueldo-efectivo" type="text" inputmode="decimal" class="kolrrhh-modal-input kolrrhh-money" readonly />
+        <input id="kolrrhh-sueldo-efectivo" type="text" inputmode="decimal" class="kolrrhh-modal-input kolrrhh-money nomodif" readonly style="background: rgba(0,0,0,.03);" />
       </div>
         <div class="kolrrhh-form-field">
           <label class="kolrrhh-modal-label">Transferencia</label>
@@ -667,7 +673,7 @@ public function ajax_get_sueldo_items(){
 
   $rows = $wpdb->get_results(
     $wpdb->prepare(
-      "SELECT id, legajo, periodo_inicio, periodo_fin, area, rol, participacion, horas,
+      "SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, area, rol, participacion, horas,
               efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas
        FROM {$table}
        WHERE legajo = %d
@@ -725,6 +731,77 @@ public function ajax_get_desempeno_items(){
   wp_send_json_success(['rows' => $rows ?: []]);
 }
 
+public function ajax_get_base(){
+  check_ajax_referer('kol_rrhh_nonce', 'nonce');
+
+  global $wpdb;
+
+  $rol   = isset($_POST['rol']) ? sanitize_text_field(wp_unslash($_POST['rol'])) : '';
+  $horas = isset($_POST['horas']) ? sanitize_text_field(wp_unslash($_POST['horas'])) : '';
+
+  if ($rol === '' || $horas === ''){
+    wp_send_json_error(['message' => 'Falta rol u horas.']);
+  }
+
+  $t_basicos = $wpdb->prefix . 'kol_rrhh_basicos';
+  $t_roles   = $wpdb->prefix . 'kol_rrhh_roles';
+  $t_horas   = $wpdb->prefix . 'kol_rrhh_horas_bandas';
+
+  // Validar existencia de tablas
+  foreach ([$t_basicos, $t_roles, $t_horas] as $t){
+    $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $t));
+    if ($exists !== $t){
+      wp_send_json_error(['message' => "No existe la tabla {$t}."]);
+    }
+  }
+
+  // Detectar columnas (flexible)
+  $cols_b = $wpdb->get_col("SHOW COLUMNS FROM {$t_basicos}", 0) ?: [];
+  $cols_r = $wpdb->get_col("SHOW COLUMNS FROM {$t_roles}", 0) ?: [];
+  $cols_h = $wpdb->get_col("SHOW COLUMNS FROM {$t_horas}", 0) ?: [];
+
+  $colRoleIdB = '';
+  foreach (['rol_id','role_id','id_rol'] as $c){ if (in_array($c,$cols_b,true)) { $colRoleIdB=$c; break; } }
+
+  $colHorasIdB = '';
+foreach (['banda_horas_id','hora_banda_id','horas_banda_id','banda_id','id_banda'] as $c){
+  if (in_array($c,$cols_b,true)) { $colHorasIdB=$c; break; }
+}
+  $colBase = '';
+  foreach (['base','basico','monto','valor'] as $c){ if (in_array($c,$cols_b,true)) { $colBase=$c; break; } }
+
+  $colRoleId = in_array('id',$cols_r,true) ? 'id' : '';
+  $colRoleName = '';
+  foreach (['nombre','rol','name','descripcion'] as $c){ if (in_array($c,$cols_r,true)) { $colRoleName=$c; break; } }
+
+  $colHorasId = in_array('id',$cols_h,true) ? 'id' : '';
+  $colHorasVal = '';
+  foreach (['horas','cantidad'] as $c){ if (in_array($c,$cols_h,true)) { $colHorasVal=$c; break; } }
+
+  if (!$colRoleIdB || !$colHorasIdB || !$colBase || !$colRoleId || !$colRoleName || !$colHorasId || !$colHorasVal){
+    wp_send_json_error(['message' => 'No se pudieron detectar columnas necesarias en basicos/roles/horas_bandas.']);
+  }
+
+  // Query: basicos -> roles (por nombre) + horas_bandas (por horas)
+  $sql = "
+    SELECT b.{$colBase} AS base
+    FROM {$t_basicos} b
+    INNER JOIN {$t_roles} r ON r.{$colRoleId} = b.{$colRoleIdB}
+    INNER JOIN {$t_horas} h ON h.{$colHorasId} = b.{$colHorasIdB}
+    WHERE r.{$colRoleName} = %s
+      AND CAST(h.{$colHorasVal} AS CHAR) = %s
+    LIMIT 1
+  ";
+
+  $row = $wpdb->get_row($wpdb->prepare($sql, $rol, (string)$horas), ARRAY_A);
+
+  $base = 0;
+  if ($row && isset($row['base'])){
+    $base = floatval(str_replace(',', '.', (string)$row['base']));
+  }
+
+  wp_send_json_success(['base' => $base]);
+}
 
 
 public function ajax_save_desempeno_item(){
@@ -901,6 +978,23 @@ if (!$rol || !$area) {
   $periodo_inicio = isset($_POST['periodo_inicio']) ? sanitize_text_field($_POST['periodo_inicio']) : '';
   $periodo_fin    = isset($_POST['periodo_fin']) ? sanitize_text_field($_POST['periodo_fin']) : '';
 
+  // Días de trabajo (0-99.99) permitido decimal
+  $dias_raw = isset($_POST['dias_de_trabajo']) ? sanitize_text_field($_POST['dias_de_trabajo']) : '';
+  $dias_raw = trim($dias_raw);
+  $dias_raw = str_replace(',', '.', $dias_raw);
+  if ($dias_raw === '') {
+    $dias_de_trabajo = 0;
+  } else {
+    if (!preg_match('/^\d{1,2}(?:\.\d{1,2})?$/', $dias_raw)) {
+      wp_send_json_error(['message' => 'Dias Trab. inválido (máx 2 dígitos y decimal opcional).']);
+    }
+    $dias_de_trabajo = floatval($dias_raw);
+    if ($dias_de_trabajo < 0 || $dias_de_trabajo >= 100) {
+      wp_send_json_error(['message' => 'Dias Trab. fuera de rango (0 a 99,99).']);
+    }
+  }
+
+
   if ($legajo <= 0) wp_send_json_error(['message' => 'Legajo inválido']);
   if (!$periodo_inicio || !$periodo_fin) wp_send_json_error(['message' => 'Periodo inicio/fin son obligatorios']);
 
@@ -959,6 +1053,7 @@ if (!$rol || !$area) {
     'legajo' => $legajo,
     'periodo_inicio' => $periodo_inicio,
     'periodo_fin' => $periodo_fin,
+    'dias_de_trabajo' => $dias_de_trabajo,
     'rol' => $rol,
     'participacion' => $participacion,
     'area' => $area,
@@ -974,18 +1069,18 @@ if (!$rol || !$area) {
     'liquidacion' => $liquidacion,
     'vac_no_tomadas' => $vac_no_tomadas
   ];
-$formats = ['%d','%s','%s','%s','%f','%s','%f','%f','%f','%f','%s','%f','%f','%d','%d','%f','%d'];
+$formats = ['%d','%s','%s','%f','%s','%f','%s','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f'];
 
   if ($id > 0) {
     $ok = $wpdb->update($table, $data, ['id' => $id], $formats, ['%d']);
     if ($ok === false) wp_send_json_error(['message' => 'No se pudo actualizar']);
-    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, rol, participacion, area, horas, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $id), ARRAY_A);
+    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $id), ARRAY_A);
     wp_send_json_success(['row' => $row]);
   } else {
     $ok = $wpdb->insert($table, $data, $formats);
     if (!$ok) wp_send_json_error(['message' => 'No se pudo insertar']);
     $new_id = intval($wpdb->insert_id);
-    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, rol, participacion, area, horas, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $new_id), ARRAY_A);
+    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $new_id), ARRAY_A);
     wp_send_json_success(['row' => $row]);
   }
 }
@@ -1615,69 +1710,7 @@ $dayKey = $this->fmt_day_key($inDt);
     wp_send_json_success(['html' => $html]);
   }
 
-  
-  public function ajax_get_base(){
-    // Devuelve el "Base" (monto) desde wp_kol_rrhh_basicos según Rol (nombre) + Horas (horas_bandas.horas)
-    if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field($_POST['nonce']), 'kol_rrhh_nonce')) {
-      wp_send_json_error(['message' => 'Nonce inválido.'], 403);
-    }
-
-    $rol_nombre = isset($_POST['rol']) ? sanitize_text_field(wp_unslash($_POST['rol'])) : '';
-    $horas = isset($_POST['horas']) ? intval($_POST['horas']) : 0;
-
-    if ($rol_nombre === '' || $horas <= 0) {
-      wp_send_json_error(['message' => 'Faltan parámetros (rol/horas).']);
-    }
-
-    global $wpdb;
-    $t_basicos = $wpdb->prefix . 'kol_rrhh_basicos';
-    $t_roles   = $wpdb->prefix . 'kol_rrhh_roles';
-    $t_horas   = $wpdb->prefix . 'kol_rrhh_horas_bandas';
-
-    // Validar existencia de tablas
-    foreach ([$t_basicos, $t_roles, $t_horas] as $t){
-      $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $t));
-      if ($exists !== $t){
-        wp_send_json_error(['message' => "No existe la tabla: {$t}"]);
-      }
-    }
-
-    $today = current_time('Y-m-d');
-
-    // Columnas según tu DB (por capturas):
-    // basicos: rol_id, banda_horas_id, monto, vigente_desde, vigente_hasta
-    // roles: id, nombre, activo
-    // horas_bandas: id, horas, activo
-    $sql = "
-      SELECT b.monto
-      FROM {$t_basicos} b
-      INNER JOIN {$t_roles} r ON r.id = b.rol_id
-      INNER JOIN {$t_horas} h ON h.id = b.banda_horas_id
-      WHERE r.nombre = %s
-        AND h.horas = %d
-        AND (r.activo = 1 OR r.activo IS NULL)
-        AND (h.activo = 1 OR h.activo IS NULL)
-        AND (b.vigente_desde IS NULL OR b.vigente_desde = '' OR b.vigente_desde <= %s)
-        AND (b.vigente_hasta IS NULL OR b.vigente_hasta = '' OR b.vigente_hasta >= %s)
-      ORDER BY
-        CASE WHEN b.vigente_desde IS NULL OR b.vigente_desde = '' THEN 0 ELSE 1 END DESC,
-        b.vigente_desde DESC,
-        b.id DESC
-      LIMIT 1
-    ";
-    $monto = $wpdb->get_var($wpdb->prepare($sql, $rol_nombre, $horas, $today, $today));
-
-    if ($monto === null) {
-      wp_send_json_success(['monto' => null, 'message' => 'Sin base para esa combinación.']);
-    }
-
-    // devolver como número (float) y también formateado
-    $monto_num = floatval($monto);
-    wp_send_json_success(['monto' => $monto_num]);
-  }
-
-
-public function ajax_print_sueldo_item(){
+  public function ajax_print_sueldo_item(){
   if (!isset($_GET['nonce']) || !wp_verify_nonce($_GET['nonce'], 'kol_rrhh_nonce')) {
     wp_die('Nonce inválido');
   }

@@ -1005,3 +1005,6 @@
 .sign {
   margin-top: 200px;
 }
+.nomodif{
+  background: rgba(0,0,0,.03);
+}

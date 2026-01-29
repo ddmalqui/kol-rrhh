@@ -1,10 +1,20 @@
 /* KOL RRHH — Modal Alta/Edición + AJAX guardar + precarga de campos + VALIDACIONES */
 (function () {
+  // ✅ WP: usar AJAX_URL vía KOL_RRHH (frontend) o AJAX_URL (admin)
+  const AJAX_URL = (typeof KOL_RRHH !== 'undefined' && KOL_RRHH && KOL_RRHH.ajaxurl)
+    ? KOL_RRHH.ajaxurl
+    : (typeof ajaxurl !== 'undefined' ? ajaxurl : '');
+  const AJAX_NONCE = (typeof KOL_RRHH !== 'undefined' && KOL_RRHH && KOL_RRHH.nonce)
+    ? KOL_RRHH.nonce
+    : '';
+
   // cache de items sueldo (para editar sin recargar)
   let __LAST_SUELDO_ROWS__ = [];
   let __CURRENT_LEGAJO__ = 0;
   let __CURRENT_CLOVER_ID__ = '';
   let __CURRENT_CLOVER_PAIRS__ = [];
+  let __CURRENT_ULTIMO_INGRESO__ = '';
+  let __CURRENT_BASE__ = 0;
 
 const KOL_RRHH_ROLES = [
   'Auxiliar','Vendedor','Responsable vendedor','Responsable Global',
@@ -36,58 +46,6 @@ const KOL_RRHH_ROLES = [
 
 
   function qs(id) { return document.getElementById(id); }
-
-  function formatMoneyKOL(n){
-    const num = Number(n);
-    if (!isFinite(num)) return '$0';
-    // si es entero, sin decimales, sino 2 decimales
-    const isInt = Math.abs(num - Math.round(num)) < 0.0000001;
-    const parts = (isInt ? String(Math.round(num)) : num.toFixed(2))
-      .replace('.', ',')
-      .replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    return '$' + parts;
-  }
-
-  async function refreshBaseFromDB(){
-    const rol = getVal('kolrrhh-sueldo-rol');
-    const horas = getVal('kolrrhh-sueldo-horas');
-    const out = qs('kolrrhh-sueldo-base');
-    if (!out) return;
-
-    if (!rol || !horas) {
-      out.textContent = '$0';
-      return;
-    }
-    if (typeof KOL_RRHH === 'undefined' || !KOL_RRHH.ajaxurl) {
-      out.textContent = '$0';
-      return;
-    }
-    try{
-      const body = new URLSearchParams();
-      body.set('action','kol_rrhh_get_base');
-      body.set('nonce', KOL_RRHH.nonce);
-      body.set('rol', rol);
-      body.set('horas', horas);
-
-      const res = await fetch(KOL_RRHH.ajaxurl, {
-        method:'POST',
-        headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'},
-        body: body.toString()
-      });
-      const json = await res.json();
-      if (!json || !json.success){
-        out.textContent = '$0';
-        return;
-      }
-      const monto = json?.data?.monto;
-      out.textContent = (monto === null || monto === undefined) ? '$0' : formatMoneyKOL(monto);
-    }catch(e){
-      console.error('refreshBaseFromDB', e);
-      out.textContent = '$0';
-    }
-  }
-
-
 
   function setText(id, v){
     const el = qs(id);
@@ -282,6 +240,7 @@ const KOL_RRHH_ROLES = [
 
     // Guardar Clover ID actual (para fichaje)
     __CURRENT_CLOVER_ID__ = String(emp?.clover_employee_id || '').trim();
+    __CURRENT_ULTIMO_INGRESO__ = String(emp?.ultima_fecha_ingreso || '').trim();
 
     if (!emp || (!emp.id && !emp.nombre && !emp.legajo)) {
       el.innerHTML = '<div style="padding:14px;opacity:.7">Seleccioná un empleado</div>';
@@ -1041,6 +1000,29 @@ if (desempenoSaveBtn) {
     // fields
     setVal('kolrrhh-sueldo-periodo-inicio', row?.periodo_inicio || '');
     setVal('kolrrhh-sueldo-periodo-fin', row?.periodo_fin || '');
+    setVal('kolrrhh-sueldo-dias-trabajo', (row?.dias_de_trabajo ?? row?.diasTrab ?? '') );
+    // máscara simple para Dias Trab.
+    const diasEl = qs('kolrrhh-sueldo-dias-trabajo');
+    if (diasEl && !diasEl.dataset.kolBind) {
+      diasEl.dataset.kolBind = '1';
+      diasEl.addEventListener('input', () => {
+        let s = String(diasEl.value || '');
+        s = s.replace(/[^0-9,\.]/g,'');
+        // dejar solo un separador decimal
+        const firstComma = s.indexOf(',');
+        const firstDot = s.indexOf('.');
+        const pos = (firstComma >= 0) ? firstComma : firstDot;
+        if (pos >= 0) {
+          const intPart = s.slice(0,pos).replace(/[^0-9]/g,'').slice(0,2);
+          const decPart = s.slice(pos+1).replace(/[^0-9]/g,'').slice(0,2);
+          s = intPart + ',' + decPart;
+        } else {
+          s = s.replace(/[^0-9]/g,'').slice(0,2);
+        }
+        diasEl.value = s;
+      });
+    }
+
     const rolSel = qs('kolrrhh-sueldo-rol');
     const areaSel = qs('kolrrhh-sueldo-area');
     const partSel = qs('kolrrhh-sueldo-participacion');
@@ -1082,15 +1064,8 @@ if (horasSel) {
       `<option value="${b.value}">${b.label}</option>`
     ).join('');
   horasSel.value = row?.horas ? String(row.horas) : '';
-
-  // actualizar BASE desde la tabla basicos (rol + horas)
-  setTimeout(refreshBaseFromDB, 0);
-
-  // listeners (evitar duplicados)
-  if (rolSel) rolSel.onchange = refreshBaseFromDB;
-  if (horasSel) horasSel.onchange = refreshBaseFromDB;
-
 }
+
 
 
 if (partSel) {
@@ -1126,6 +1101,9 @@ if (partSel) {
     // reset labels calculados (UI)
     ['kolrrhh-sueldo-base','kolrrhh-sueldo-antig','kolrrhh-sueldo-comision','kolrrhh-sueldo-presentismo','kolrrhh-sueldo-desempeno','kolrrhh-sueldo-no-rem']
       .forEach(id => setText(id, '$0'));
+
+    // ✅ Traer Base desde la tabla (según Rol + Horas)
+    refreshBaseFromDB();
 
     clearSueldoError();
 
@@ -1173,6 +1151,108 @@ if (partSel) {
 }
 
 
+function parseISODateLocal(iso) {
+  // Acepta "YYYY-MM-DD" (input type=date) o "DD/MM/YYYY" (formato guardado en WP)
+  if (!iso) return null;
+  let s = String(iso).trim();
+  if (!s) return null;
+
+  // Si viene DD/MM/YYYY lo convertimos a ISO
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {
+    s = dmyToISO(s); // función ya definida arriba
+  }
+
+  // Si no quedó en ISO, no podemos calcular
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+
+  const d = new Date(s + 'T00:00:00');
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function yearsVencidos(ingresoISO, refISO) {
+  const ini = parseISODateLocal(ingresoISO);
+  const ref = parseISODateLocal(refISO) || new Date(); // fallback hoy
+  if (!ini) return 0;
+
+  let y = ref.getFullYear() - ini.getFullYear();
+
+  // Si todavía no llegó el aniversario en el año de referencia, restar 1
+  const refMonth = ref.getMonth(), refDay = ref.getDate();
+  const iniMonth = ini.getMonth(), iniDay = ini.getDate();
+  if (refMonth < iniMonth || (refMonth === iniMonth && refDay < iniDay)) {
+    y--;
+  }
+
+  return Math.max(0, y);
+}
+
+function refreshAntigFromState(){
+  const ingreso = String(__CURRENT_ULTIMO_INGRESO__ || '').trim();
+
+  if (!ingreso || !__CURRENT_BASE__) {
+    setText('kolrrhh-sueldo-antig', '$0');
+    return;
+  }
+
+  // Tomamos como referencia la fecha FIN del período si existe; si no, hoy
+  const refISO = getVal('kolrrhh-sueldo-periodo-fin') || '';
+
+  const years = yearsVencidos(ingreso, refISO);
+  const antig = Number(__CURRENT_BASE__ || 0) * 0.01 * years;
+
+  setText(
+    'kolrrhh-sueldo-antig',
+    (typeof moneyAR === 'function') ? moneyAR(antig) : ('$' + antig.toFixed(2))
+  );
+}
+
+async function refreshBaseFromDB(){
+  const rol = getVal('kolrrhh-sueldo-rol');
+  const horas = getVal('kolrrhh-sueldo-horas');
+
+  // Si falta algo, dejamos $0
+  if (!rol || !horas){
+    __CURRENT_BASE__ = 0;
+    setText('kolrrhh-sueldo-base', '$0');
+    refreshAntigFromState();
+    return;
+  }
+
+  try{
+    const fd = new FormData();
+    fd.append('action', 'kol_rrhh_get_base');
+    fd.append('nonce', (window.KOL_RRHH && KOL_RRHH.nonce) ? KOL_RRHH.nonce : '');
+    fd.append('rol', rol);
+    fd.append('horas', horas);
+
+    const res = await fetch(KOL_RRHH.ajaxurl, { method: 'POST', body: fd, credentials: 'same-origin' });
+    const json = await res.json();
+
+    if (!json || !json.success){
+      __CURRENT_BASE__ = 0;
+      setText('kolrrhh-sueldo-base', '$0');
+      refreshAntigFromState();
+      return;
+    }
+
+    const base = Number(json.data?.base || 0);
+
+    __CURRENT_BASE__ = base;
+
+    // Usá tu formateador existente si lo tenés.
+    // En tu render usás moneyAR(...), así que lo reutilizo:
+    setText('kolrrhh-sueldo-base', (typeof moneyAR === 'function') ? moneyAR(base) : ('$' + base));
+    refreshAntigFromState();
+  }catch(e){
+    console.error(e);
+    __CURRENT_BASE__ = 0;
+    setText('kolrrhh-sueldo-base', '$0');
+    refreshAntigFromState();
+  }
+}
+
+
+
   function closeSueldoModal(){
     const modal = qs('kolrrhh-sueldo-modal');
     if(!modal) return;
@@ -1183,7 +1263,7 @@ if (partSel) {
     setVal('kolrrhh-sueldo-area', '');
 
 
-    ['kolrrhh-sueldo-periodo-inicio','kolrrhh-sueldo-periodo-fin','kolrrhh-sueldo-rol','kolrrhh-sueldo-participacion','kolrrhh-sueldo-jornada',
+    ['kolrrhh-sueldo-periodo-inicio','kolrrhh-sueldo-periodo-fin','kolrrhh-sueldo-dias-trabajo','kolrrhh-sueldo-rol','kolrrhh-sueldo-participacion','kolrrhh-sueldo-jornada',
      'kolrrhh-sueldo-efectivo','kolrrhh-sueldo-transferencia','kolrrhh-sueldo-creditos','kolrrhh-sueldo-bono','kolrrhh-sueldo-descuentos','kolrrhh-sueldo-liquidacion',
      'kolrrhh-sueldo-vac-tomadas','kolrrhh-sueldo-feriados','kolrrhh-sueldo-vac-no-tomadas'
     ].forEach(id => setVal(id, ''));
@@ -1243,6 +1323,7 @@ if (partSel) {
                 <div class="kolrrhh-datebox-day">${escapeHtml(b.day)}</div>
                 <div class="kolrrhh-datebox-year">${escapeHtml(b.year)}</div>
               </div>
+                          <div class="kolrrhh-sueldo-days" style="margin-left:12px;white-space:nowrap;font-size:12px;opacity:.85;">Dias Trab.: <strong>${escapeHtml(String(r.dias_de_trabajo ?? ''))}</strong></div>
             </div>
 
         <div class="kolrrhh-sueldo-role">
@@ -1340,6 +1421,7 @@ if (partSel) {
 
     // Guardar Clover ID actual (para fichaje)
     __CURRENT_CLOVER_ID__ = String(emp?.clover_employee_id || '').trim();
+    __CURRENT_ULTIMO_INGRESO__ = String(emp?.ultima_fecha_ingreso || '').trim();
 
     let legajoNum = 0;
 
@@ -1645,6 +1727,16 @@ if (partSel) {
           return;
         }
 
+        const rolSel = qs('kolrrhh-sueldo-rol');
+if (rolSel) rolSel.addEventListener('change', refreshBaseFromDB);
+
+const horasSel = qs('kolrrhh-sueldo-horas');
+if (horasSel) horasSel.addEventListener('change', refreshBaseFromDB);
+
+
+const finSel = qs('kolrrhh-sueldo-periodo-fin');
+if (finSel) finSel.addEventListener('change', refreshAntigFromState);
+
         saveBtn.disabled = true;
         const oldText = saveBtn.textContent;
         saveBtn.textContent = 'Guardando...';
@@ -1782,8 +1874,17 @@ if (partSel) {
 
         const periodo_inicio = getVal('kolrrhh-sueldo-periodo-inicio');
         const periodo_fin = getVal('kolrrhh-sueldo-periodo-fin');
+        const dias_de_trabajo_raw = getVal('kolrrhh-sueldo-dias-trabajo');
 
         const errorPeriodo = validarPeriodoSueldo(periodo_inicio, periodo_fin);
+        // Validar Dias Trab. (0-99.99, max 2 dígitos + decimal opcional)
+        const diasNorm = String(dias_de_trabajo_raw || '').trim().replace(',', '.');
+        if (diasNorm !== '') {
+          if (!/^\d{1,2}(?:\.\d{1,2})?$/.test(diasNorm)) { showSueldoError('Dias Trab. inválido (máx 2 dígitos y decimal opcional).'); return; }
+          const diasNum = parseFloat(diasNorm);
+          if (!isFinite(diasNum) || diasNum < 0 || diasNum >= 100) { showSueldoError('Dias Trab. fuera de rango (0 a 99,99).'); return; }
+        }
+
         if (errorPeriodo) {
           showSueldoError(errorPeriodo);
           return;
@@ -1802,6 +1903,7 @@ if (partSel) {
 
         payload.set('periodo_inicio', periodo_inicio);
         payload.set('periodo_fin', periodo_fin);
+        payload.set('dias_de_trabajo', String(dias_de_trabajo_raw || '').trim());
         payload.set('rol', getVal('kolrrhh-sueldo-rol'));
         payload.set('horas', getVal('kolrrhh-sueldo-horas'));
         payload.set('participacion', getVal('kolrrhh-sueldo-participacion') || '0.0');
