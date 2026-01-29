@@ -16,6 +16,7 @@
   let __CURRENT_ULTIMO_INGRESO__ = '';
   let __CURRENT_BASE__ = 0;
 
+let __CURRENT_COMISION__ = 0;
 const KOL_RRHH_ROLES = [
   'Auxiliar','Vendedor','Responsable vendedor','Responsable Global',
   'Responsable del local','Administracion','Tecnico','Redes',
@@ -1071,6 +1072,20 @@ if (horasSel) {
 if (partSel) {
   partSel.innerHTML = buildParticipacionOptions();
   partSel.value = normalizeParticipacion(row?.participacion ?? '0');
+
+   partSel.addEventListener('change', () => {
+  const partRaw = getVal('kolrrhh-sueldo-participacion') || '0';
+  const participacion = parseFloat(partRaw.replace(',', '.')) || 0;
+
+  const areaSel = getVal('kolrrhh-sueldo-area');
+  const factor = getComisionFactorByArea(areaSel);
+
+  const comisionFinal =
+    __CURRENT_COMISION__ * (participacion / 100) * factor;
+
+  setText('kolrrhh-sueldo-comision', moneyAR(comisionFinal));
+});
+
 }
 
     setVal('kolrrhh-sueldo-jornada', row?.jornada || '');
@@ -1104,6 +1119,7 @@ if (partSel) {
 
     // ✅ Traer Base desde la tabla (según Rol + Horas)
     refreshBaseFromDB();
+    refreshComisionFromDB();
 
     clearSueldoError();
 
@@ -1250,6 +1266,124 @@ async function refreshBaseFromDB(){
     refreshAntigFromState();
   }
 }
+
+function getComisionFactorByArea(area) {
+  if (!area) return 0;
+
+  // Normalizamos por las dudas
+  const a = String(area).trim();
+
+  // Depósito
+  if (a === 'Dep') {
+    return 0.009;
+  }
+
+  // Locales con 1%
+  const locales01 = [
+    'Local 15',
+    'Local 34',
+    'Local 55',
+    'Lujan',
+    'Osi',
+    'Sh',
+    'Sol',
+    'Stoto',
+    'Urb'
+  ];
+  if (locales01.includes(a)) {
+    return 0.01;
+  }
+
+  // Áreas sin comisión
+  const areasSinComision = [
+    'Administracion',
+    'Entrenamiento',
+    'Logistica',
+    'Redes'
+  ];
+  if (areasSinComision.includes(a)) {
+    return 0;
+  }
+
+  // Default seguro
+  return 0;
+}
+
+
+async function refreshComisionFromDB(){
+  try{
+    if (typeof KOL_RRHH === 'undefined' || !KOL_RRHH.ajaxurl) return;
+
+    const area = getVal('kolrrhh-sueldo-area');
+    const fin  = getVal('kolrrhh-sueldo-periodo-fin') || getVal('kolrrhh-sueldo-periodo-inicio');
+
+    // Si no hay datos, dejamos 0.
+    if (!area || !fin){
+      __CURRENT_COMISION__ = 0;
+      setText('kolrrhh-sueldo-comision', '$0');
+      return;
+    }
+
+    // Solo aplica para "locales" (no para "áreas" tipo Logística, etc.)
+    const locales = (KOL_RRHH.locales || []);
+    const esLocal = locales.includes(area);
+    if (!esLocal){
+      __CURRENT_COMISION__ = 0;
+      setText('kolrrhh-sueldo-comision', '$0');
+      return;
+    }
+
+    const m = String(fin).match(/^(\d{4})-(\d{2})/);
+    if (!m){
+      __CURRENT_COMISION__ = 0;
+      setText('kolrrhh-sueldo-comision', '$0');
+      return;
+    }
+
+    const anio = Number(m[1]);
+    const mes  = Number(m[2]);
+
+    const body = new URLSearchParams();
+    body.append('action', 'kol_rrhh_get_comision');
+    body.append('nonce', AJAX_NONCE);
+    body.append('area', area);
+    body.append('anio', String(anio));
+    body.append('mes', String(mes));
+
+    const res = await fetch(AJAX_URL, { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'}, body: body.toString() });
+    const json = await res.json();
+
+    const ventas = (json && json.success && json.data && json.data.ventas !== undefined)
+      ? Number(json.data.ventas || 0)
+      : 0;
+
+   __CURRENT_COMISION__ = isFinite(ventas) ? ventas : 0;
+
+// 👉 aplicar participación
+const partRaw = getVal('kolrrhh-sueldo-participacion') || '0';
+const participacion = parseFloat(partRaw.replace(',', '.')) || 0;
+
+// participacion es % (0.0 a 10.0)
+const areaSel = getVal('kolrrhh-sueldo-area');
+const factor = getComisionFactorByArea(areaSel);
+
+const comisionFinal =
+  __CURRENT_COMISION__ * (participacion / 100) * factor;
+
+// Mostrar
+const elId = 'kolrrhh-sueldo-comision';
+if (typeof moneyAR === 'function'){
+  setText(elId, moneyAR(comisionFinal));
+} else {
+  setText(elId, '$' + String(comisionFinal));
+}
+
+  } catch(e){
+    __CURRENT_COMISION__ = 0;
+    setText('kolrrhh-sueldo-comision', '$0');
+  }
+}
+
 
 
 
@@ -1734,8 +1868,27 @@ const horasSel = qs('kolrrhh-sueldo-horas');
 if (horasSel) horasSel.addEventListener('change', refreshBaseFromDB);
 
 
+const iniSel = qs('kolrrhh-sueldo-periodo-inicio');
+if (iniSel) iniSel.addEventListener('change', refreshComisionFromDB);
+
+const areaSel = qs('kolrrhh-sueldo-area');
+if (areaSel) areaSel.addEventListener('change', refreshComisionFromDB);
+if (areaSel) {
+  areaSel.addEventListener('change', () => {
+    const partRaw = getVal('kolrrhh-sueldo-participacion') || '0';
+    const participacion = parseFloat(partRaw.replace(',', '.')) || 0;
+
+    const factor = getComisionFactorByArea(areaSel.value);
+
+    const comisionFinal =
+      __CURRENT_COMISION__ * (participacion / 100) * factor;
+
+    setText('kolrrhh-sueldo-comision', moneyAR(comisionFinal));
+  });
+}
+
 const finSel = qs('kolrrhh-sueldo-periodo-fin');
-if (finSel) finSel.addEventListener('change', refreshAntigFromState);
+if (finSel) finSel.addEventListener('change', () => { refreshAntigFromState(); refreshComisionFromDB(); });
 
         saveBtn.disabled = true;
         const oldText = saveBtn.textContent;

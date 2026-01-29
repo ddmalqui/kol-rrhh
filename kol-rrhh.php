@@ -24,9 +24,7 @@ final class KOL_RRHH_Plugin {
     add_action('wp_ajax_kol_rrhh_get_fichaje_html', [$this,'ajax_get_fichaje_html']);
     add_action('wp_ajax_kol_rrhh_print_sueldo_item', [$this, 'ajax_print_sueldo_item']);
     add_action('wp_ajax_kol_rrhh_get_base', [$this,'ajax_get_base']);
-
-
-
+    add_action('wp_ajax_kol_rrhh_get_comision', [$this,'ajax_get_comision']);
     add_shortcode(self::SHORTCODE, [$this,'shortcode']);
   }
 
@@ -804,6 +802,73 @@ foreach (['banda_horas_id','hora_banda_id','horas_banda_id','banda_id','id_banda
 }
 
 
+
+
+public function ajax_get_comision(){
+  check_ajax_referer('kol_rrhh_nonce', 'nonce');
+
+  global $wpdb;
+
+  $area = isset($_POST['area']) ? sanitize_text_field(wp_unslash($_POST['area'])) : '';
+  $anio = isset($_POST['anio']) ? intval($_POST['anio']) : 0;
+  $mes  = isset($_POST['mes']) ? intval($_POST['mes']) : 0;
+
+  if ($area === '' || $anio <= 0 || $mes <= 0 || $mes > 12){
+    wp_send_json_error(['message' => 'Parámetros inválidos (area/anio/mes).']);
+  }
+
+  // Tablas
+  $t_locales = $wpdb->prefix . 'kol_locales';
+  $t_ventas  = $wpdb->prefix . 'kol_ventas_mensuales';
+
+  foreach ([$t_locales, $t_ventas] as $t){
+    $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $t));
+    if ($exists !== $t){
+      wp_send_json_error(['message' => "No existe la tabla {$t}."]);
+    }
+  }
+
+  // Columnas (flexible)
+  $cols_l = $wpdb->get_col("SHOW COLUMNS FROM {$t_locales}", 0) ?: [];
+  $cols_v = $wpdb->get_col("SHOW COLUMNS FROM {$t_ventas}", 0) ?: [];
+
+  $colLocId   = in_array('id', $cols_l, true) ? 'id' : '';
+  $colLocName = in_array('nombre', $cols_l, true) ? 'nombre' : (in_array('name', $cols_l, true) ? 'name' : '');
+
+  $colVentaLoc = '';
+  foreach (['local_id','local','id_local','locales_id','id_locales'] as $c){
+    if (in_array($c, $cols_v, true)) { $colVentaLoc = $c; break; }
+  }
+  $colVentaAnio = in_array('anio', $cols_v, true) ? 'anio' : (in_array('año', $cols_v, true) ? 'año' : '');
+  $colVentaMes  = in_array('mes', $cols_v, true) ? 'mes' : '';
+  $colVentaMonto = '';
+  foreach (['ventas','monto','importe','total'] as $c){
+    if (in_array($c, $cols_v, true)) { $colVentaMonto = $c; break; }
+  }
+
+  if (!$colLocId || !$colLocName || !$colVentaLoc || !$colVentaAnio || !$colVentaMes || !$colVentaMonto){
+    wp_send_json_error(['message' => 'No se pudieron detectar columnas necesarias en locales/ventas_mensuales.']);
+  }
+
+  $sql = "
+    SELECT v.{$colVentaMonto} AS ventas
+    FROM {$t_ventas} v
+    INNER JOIN {$t_locales} l ON l.{$colLocId} = v.{$colVentaLoc}
+    WHERE l.{$colLocName} = %s
+      AND v.{$colVentaAnio} = %d
+      AND v.{$colVentaMes} = %d
+    LIMIT 1
+  ";
+
+  $row = $wpdb->get_row($wpdb->prepare($sql, $area, $anio, $mes), ARRAY_A);
+
+  $ventas = 0;
+  if ($row && isset($row['ventas'])){
+    $ventas = floatval(str_replace(',', '.', (string)$row['ventas']));
+  }
+
+  wp_send_json_success(['ventas' => $ventas]);
+}
 public function ajax_save_desempeno_item(){
   if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
     wp_send_json_error(['message' => 'Nonce inválido']);
