@@ -1035,48 +1035,161 @@
   align-items:center;
   justify-content:space-between;
   gap:12px;
-  padding: 14px;
+  padding: 14px 16px;
   border-radius: 16px;
-  background: rgba(0,0,0,.03);
+  background: #fff;
+  border: 1px solid rgba(0,0,0,.06);
+  box-shadow: 0 10px 24px rgba(0,0,0,.06);
 }
+
+.kolrrhh-locales-head-left{ min-width:0; }
+.kolrrhh-locales-head-right{
+  display:flex;
+  align-items:center;
+  gap: 12px;
+}
+
 .kolrrhh-locales-title{
   font-weight: 950;
   font-size: 18px;
   letter-spacing: .01em;
+  color:#222;
 }
+
 .kolrrhh-locales-sub{
   margin-top: 4px;
   font-size: 12px;
   opacity:.75;
   font-weight: 700;
 }
-.kolrrhh-locales-list{
+
+.kolrrhh-locales-card{
   margin-top: 12px;
-  border-radius: 14px;
+  border-radius: 16px;
   background: #fff;
   border: 1px solid rgba(0,0,0,.06);
+  box-shadow: 0 10px 24px rgba(0,0,0,.06);
   overflow:hidden;
 }
-.kolrrhh-locales-row{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap: 12px;
-  padding: 12px 14px;
+
+.kolrrhh-locales-periodo{
+  padding: 14px;
   border-bottom: 1px solid rgba(0,0,0,.06);
 }
-.kolrrhh-locales-row:last-child{ border-bottom:0; }
-.kolrrhh-locales-name{
-  font-weight: 850;
-  font-size: 14px;
-  color:#4a4a4a;
+.kolrrhh-locales-periodo:last-child{ border-bottom:0; }
+
+.kolrrhh-locales-periodo-head{
+  display:flex;
+  align-items:center;
+  gap: 12px;
+  margin-bottom: 12px;
 }
-.kolrrhh-locales-chip{
-  font-size: 11px;
+
+.kolrrhh-locales-periodo-title{
+  font-weight: 950;
+  color:#333;
+  font-size: 14px;
+}
+
+/* Badge Mes (tipo calendario) */
+.kolrrhh-monthbadge{
+  width: 100%;
+  border-radius: 16px;
+  overflow:hidden;
+  border: 1px solid rgba(0,0,0,.08);
+  background: #fff;
+  text-align:center;
+  box-shadow: 0 10px 24px rgba(0,0,0,.06);
+  flex: 0 0 auto;
+}
+
+.kolrrhh-monthbadge-top{
+  padding: 7px 0 6px;
+  font-weight: 950;
+  letter-spacing: .08em;
+  font-size: 12px;
+  color:#fff;
+  background: linear-gradient(180deg, #ffb13a, #ff7a2f);
+}
+
+.kolrrhh-monthbadge-mid{
+  padding: 10px 0 0;
+  font-weight: 950;
+  font-size: 26px;
+  color:#444;
+  line-height: 1;
+}
+
+.kolrrhh-monthbadge-bot{
+  padding: 6px 0 10px;
+  font-weight: 800;
+  font-size: 12px;
+  opacity:.7;
+}
+
+/* Tabla */
+.kolrrhh-locales-tablewrap{
+  width: 100%;
+  overflow:auto;
+  border-radius: 14px;
+  border: 1px solid rgba(0,0,0,.06);
+}
+
+.kolrrhh-locales-table{
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+  background:#fff;
+}
+
+.kolrrhh-locales-table th,
+.kolrrhh-locales-table td{
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  vertical-align: middle;
+}
+
+.kolrrhh-locales-table thead th{
+  background: rgba(0,0,0,.02);
+  font-weight: 950;
+  font-size: 12px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  opacity: .75;
+  text-align:right;
+}
+
+.kolrrhh-locales-table thead th:first-child{
+  text-align:left;
+}
+
+.kolrrhh-locales-table tbody tr:last-child td{
+  border-bottom: 0;
+}
+
+.kolrrhh-td-left{
+  text-align:left;
   font-weight: 900;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(0,0,0,.10);
-  background: rgba(0,0,0,.03);
-  opacity:.85;
+  color:#444;
+}
+
+.kolrrhh-td-num{
+  text-align:right;
+  font-weight: 750;
+  color:#777;
+  white-space: nowrap;
+}
+
+.kolrrhh-td-strong{
+  font-weight: 950;
+  color:#666;
+}
+
+.kolrrhh-errbox{
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(176,0,32,.06);
+  border: 1px solid rgba(176,0,32,.12);
+  color: #b00020;
+  font-weight: 900;
 }
