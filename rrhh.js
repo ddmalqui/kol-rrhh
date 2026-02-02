@@ -16,6 +16,7 @@
   let __VIEW_MODE__ = 'employees'; // employees | locales
   let __CURRENT_ULTIMO_INGRESO__ = '';
   let __CURRENT_BASE__ = 0;
+  let __CURRENT_DESEMPENO_ROWS__ = [];
 
 let __CURRENT_COMISION__ = 0;
 const KOL_RRHH_ROLES = [
@@ -575,7 +576,9 @@ async function loadDesempenoForLegajo(legajoNum){
       }
 
       const rows = (json.data.rows || []);
+      __CURRENT_DESEMPENO_ROWS__ = rows;
       renderDesempenoTable(rows);
+      refreshDesempenoFromState();
     }catch(err){
       console.error(err);
       if (host) host.textContent = 'Error de red/servidor al cargar.';
@@ -601,6 +604,34 @@ async function loadDesempenoForLegajo(legajoNum){
     }
 
     return s || '—';
+  }
+
+  function getMesKey(iso){
+    const s = String(iso || '').trim();
+    const m = s.match(/^(\d{4})-(\d{2})(?:-\d{2})?$/);
+    if (!m) return '';
+    return `${m[1]}-${m[2]}`;
+  }
+
+  function getDesempenoPctFromRows(periodoISO){
+    const mesKey = getMesKey(periodoISO);
+    if (!mesKey) return 0;
+
+    const rows = __CURRENT_DESEMPENO_ROWS__ || [];
+    const match = rows.find(r => getMesKey(r.mes) === mesKey);
+    if (!match) return 0;
+
+    const raw = match.desempeno ?? 0;
+    const pct = parseFloat(String(raw).replace(',', '.'));
+    return isFinite(pct) ? pct : 0;
+  }
+
+  function refreshDesempenoFromState(){
+    const base = Number(__CURRENT_BASE__ || 0);
+    const periodo = getVal('kolrrhh-sueldo-periodo-inicio') || getVal('kolrrhh-sueldo-periodo-fin');
+    const pct = getDesempenoPctFromRows(periodo);
+    const total = base * (pct / 100);
+    setText('kolrrhh-sueldo-desempeno', (typeof moneyAR === 'function') ? moneyAR(total) : ('$' + String(total)));
   }
 
   function parseInasistencias(val){
@@ -1115,12 +1146,13 @@ if (partSel) {
       });
 
     // reset labels calculados (UI)
-    ['kolrrhh-sueldo-base','kolrrhh-sueldo-antig','kolrrhh-sueldo-comision','kolrrhh-sueldo-rendimiento','kolrrhh-sueldo-desempeno','kolrrhh-sueldo-no-rem']
+    ['kolrrhh-sueldo-base','kolrrhh-sueldo-antig','kolrrhh-sueldo-comision','kolrrhh-sueldo-presentismo','kolrrhh-sueldo-desempeno','kolrrhh-sueldo-no-rem']
       .forEach(id => setText(id, '$0'));
 
     // ✅ Traer Base desde la tabla (según Rol + Horas)
     refreshBaseFromDB();
     refreshComisionFromDB();
+    refreshDesempenoFromState();
 
     clearSueldoError();
 
@@ -1165,38 +1197,6 @@ if (partSel) {
   }
 
   return '';
-}
-
-async function autoloadDesempeno(){
-  const base = __CURRENT_BASE__;
-  const legajo = getVal('kolrrhh-sueldo-legajo');
-  const inicio = getVal('kolrrhh-sueldo-periodo-inicio');
-
-  if(!base || !legajo || !inicio) return;
-
-  // sacamos mes YYYY-MM-01
-  const mes = inicio.substring(0,7) + '-01';
-
-  const body = new URLSearchParams();
-  body.set('action','kol_rrhh_get_desempeno_valor');
-  body.set('nonce', KOL_RRHH.nonce);
-  body.set('legajo', legajo);
-  body.set('mes', mes);
-
-  const res = await fetch(KOL_RRHH.ajaxurl,{
-    method:'POST',
-    headers:{'Content-Type':'application/x-www-form-urlencoded'},
-    body: body.toString()
-  });
-
-  const json = await res.json();
-  if(!json.success) return;
-
-  const pct = parseFloat(json.data.pct || 0);
-  const importe = base * (pct / 100);
-
- setText('kolrrhh-sueldo-desempeno', moneyAR(importe));
-
 }
 
 
@@ -1255,15 +1255,6 @@ function refreshAntigFromState(){
   );
 }
 
-const periodoInicioEl = qs('kolrrhh-sueldo-periodo-inicio');
-if (periodoInicioEl && !periodoInicioEl.dataset.desempenoBind) {
-  periodoInicioEl.dataset.desempenoBind = '1';
-
-  periodoInicioEl.addEventListener('change', function () {
-    autoloadDesempeno();
-  });
-}
-
 async function refreshBaseFromDB(){
   const rol = getVal('kolrrhh-sueldo-rol');
   const horas = getVal('kolrrhh-sueldo-horas');
@@ -1273,6 +1264,7 @@ async function refreshBaseFromDB(){
     __CURRENT_BASE__ = 0;
     setText('kolrrhh-sueldo-base', '$0');
     refreshAntigFromState();
+    refreshDesempenoFromState();
     return;
   }
 
@@ -1290,6 +1282,7 @@ async function refreshBaseFromDB(){
       __CURRENT_BASE__ = 0;
       setText('kolrrhh-sueldo-base', '$0');
       refreshAntigFromState();
+      refreshDesempenoFromState();
       return;
     }
 
@@ -1297,17 +1290,17 @@ async function refreshBaseFromDB(){
 
     __CURRENT_BASE__ = base;
 
-
     // Usá tu formateador existente si lo tenés.
     // En tu render usás moneyAR(...), así que lo reutilizo:
     setText('kolrrhh-sueldo-base', (typeof moneyAR === 'function') ? moneyAR(base) : ('$' + base));
     refreshAntigFromState();
-    autoloadDesempeno();
+    refreshDesempenoFromState();
   }catch(e){
     console.error(e);
     __CURRENT_BASE__ = 0;
     setText('kolrrhh-sueldo-base', '$0');
     refreshAntigFromState();
+    refreshDesempenoFromState();
   }
 }
 
@@ -1447,7 +1440,7 @@ if (typeof moneyAR === 'function'){
     ].forEach(id => setVal(id, ''));
 
     // reset labels calculados
-    ['kolrrhh-sueldo-base','kolrrhh-sueldo-antig','kolrrhh-sueldo-comision','kolrrhh-sueldo-rendimiento','kolrrhh-sueldo-desempeno','kolrrhh-sueldo-no-rem']
+    ['kolrrhh-sueldo-base','kolrrhh-sueldo-antig','kolrrhh-sueldo-comision','kolrrhh-sueldo-presentismo','kolrrhh-sueldo-desempeno','kolrrhh-sueldo-no-rem']
       .forEach(id => setText(id, '$0'));
 
     clearSueldoError();
@@ -1790,165 +1783,39 @@ if (typeof moneyAR === 'function'){
       `;
     }
 
-    
-    function fmtPct(v){
-      const n = parseFloat(String(v ?? '0').replace(',', '.'));
-      const val = isNaN(n) ? 0 : n;
-      return val.toFixed(2).replace('.', ',') + '%';
-    }
-
-    function fmtCoef(v){
-      const n = parseFloat(String(v ?? '0').replace(',', '.'));
-      const val = isNaN(n) ? 0 : n;
-      return val.toFixed(3).replace('.', ',');
-    }
-
-    function formatMonthYearEs(mes, anio){
-      const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-      const m = parseInt(mes, 10);
-      const a = parseInt(anio, 10);
-      const name = (m >= 1 && m <= 12) ? meses[m-1] : `Mes ${m}`;
-      return `${name} ${a}`;
-    }
-
-    function monthShortEs(mes){
-      const map = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
-      const m = parseInt(mes, 10);
-      return (m >= 1 && m <= 12) ? map[m-1] : 'MES';
-    }
-
-    async function ajaxPost(action, extra = {}){
-      const fd = new FormData();
-      fd.append('action', action);
-      if (AJAX_NONCE) fd.append('nonce', AJAX_NONCE);
-      Object.entries(extra).forEach(([k,v]) => fd.append(k, String(v)));
-
-      const res = await fetch(AJAX_URL, { method:'POST', body: fd, credentials:'same-origin' });
-      const json = await res.json();
-      if (!json || !json.success) {
-        const msg = (json && json.data && json.data.message) ? json.data.message : 'Error inesperado';
-        throw new Error(msg);
-      }
-      return json.data || {};
-    }
-
-    function renderDesempenoLocalesTable(rows){
-      const safe = Array.isArray(rows) ? rows : [];
-      if (!safe.length){
-        return `<div class="kolrrhh-muted" style="padding:12px 14px;">No hay datos cargados para este período.</div>`;
-      }
-
-      const body = safe.map(r => `
-        <tr>
-          <td class="kolrrhh-td-left">${escapeHtml(r.local_nombre || ('ID ' + (r.local_id ?? '—')))}</td>
-          <td class="kolrrhh-td-num">${escapeHtml(fmtPct(r.control_caja_pct))}</td>
-          <td class="kolrrhh-td-num">${escapeHtml(fmtPct(r.objetivos_pct))}</td>
-          <td class="kolrrhh-td-num">${escapeHtml(fmtPct(r.compras_pct))}</td>
-          <td class="kolrrhh-td-num kolrrhh-td-strong">${escapeHtml(fmtPct(r.total_pct))}</td>
-          <td class="kolrrhh-td-num">${escapeHtml(fmtCoef(r.comision_coef))}</td>
-        </tr>
-      `).join('');
-
-      return `
-        <div class="kolrrhh-locales-tablewrap">
-          <table class="kolrrhh-locales-table">
-            <thead>
-              <tr>
-                <th style="text-align:left;">Local</th>
-                <th>Control caja</th>
-                <th>Objetivos</th>
-                <th>Compras</th>
-                <th>Total</th>
-                <th>Coef.</th>
-              </tr>
-            </thead>
-            <tbody>${body}</tbody>
-          </table>
-        </div>
-      `;
-    }
-
-    async function renderLocalesPanel(){
+    function renderLocalesPanel(){
       const el = qs('kolrrhh-detail');
       if (!el) return;
 
+      const list = (typeof KOL_RRHH !== 'undefined' && Array.isArray(KOL_RRHH.locales)) ? KOL_RRHH.locales : [];
+      const rows = (list && list.length)
+        ? list.map((name, i) => `
+            <div class="kolrrhh-locales-row">
+              <div class="kolrrhh-locales-name">${escapeHtml(String(name || '—'))}</div>
+              <div class="kolrrhh-locales-chip">LOCAL</div>
+            </div>
+          `).join('')
+        : `<div class="kolrrhh-muted" style="padding:14px;">No hay locales cargados.</div>`;
+
       el.innerHTML = `
         <div class="kolrrhh-locales-head">
-          <div class="kolrrhh-locales-head-left">
-            <div class="kolrrhh-locales-title">Rendimiento por local</div>
+          <div>
+            <div class="kolrrhh-locales-title">Locales</div>
+            <div class="kolrrhh-locales-sub">Listado de locales (solo vista por ahora)</div>
           </div>
-          <div class="kolrrhh-locales-head-right">
-            <button type="button" class="kolrrhh-pill kolrrhh-pill is-off kolrrhh-locales-back" id="kolrrhh-locales-back">Volver</button>
-          </div>
+          <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary kolrrhh-btn-small" id="kolrrhh-locales-back">Volver</button>
         </div>
-
-        <div class="kolrrhh-locales-card">
-          <div id="kolrrhh-locales-panels" class="kolrrhh-muted" style="padding:14px;">Cargando períodos...</div>
-        </div>
+        <div class="kolrrhh-locales-list">${rows}</div>
       `;
-
-      const panels = qs('kolrrhh-locales-panels');
-      let periodos = [];
-
-      try {
-        const data = await ajaxPost('kol_rrhh_get_desempeno_locales_periodos', {});
-        periodos = Array.isArray(data.periodos) ? data.periodos : [];
-      } catch (e){
-        if (panels) panels.innerHTML = `<div class="kolrrhh-errbox">${escapeHtml(e.message)}</div>`;
-        return;
-      }
-
-      if (!periodos.length){
-        if (panels) panels.innerHTML = `<div style="padding:14px;">No hay desempeño cargado todavía.</div>`;
-        return;
-      }
-
-      // Render cards por período (si hay uno solo, queda perfecto igual)
-      if (panels) panels.classList.remove('kolrrhh-muted');
-
-      if (panels){
-        panels.innerHTML = periodos.map(p => {
-          const label = formatMonthYearEs(p.mes, p.anio);
-          const short = monthShortEs(p.mes);
-          const id = `kolrrhh-tabla-${p.anio}-${p.mes}`;
-          return `
-            <div class="kolrrhh-locales-periodo">
-              <div class="kolrrhh-locales-periodo-head">
-                <div class="kolrrhh-monthbadge" title="${escapeHtml(label)}">
-                  <div class="kolrrhh-monthbadge-top">${escapeHtml(short)}</div>
-                  <div class="kolrrhh-monthbadge-bot">${escapeHtml(String(p.anio))}</div>
-                </div>
-              </div>
-              <div id="${escapeHtml(id)}" class="kolrrhh-muted" style="padding:12px 14px;">Cargando tabla...</div>
-            </div>
-          `;
-        }).join('');
-      }
-
-      // Cargar data para cada período y renderizar su tabla
-      for (const p of periodos){
-        const holderId = `kolrrhh-tabla-${p.anio}-${p.mes}`;
-        const holder = qs(holderId);
-        if (!holder) continue;
-
-        try {
-          const data = await ajaxPost('kol_rrhh_get_desempeno_locales', { anio: p.anio, mes: p.mes });
-          holder.classList.remove('kolrrhh-muted');
-          holder.innerHTML = renderDesempenoLocalesTable(data.rows || []);
-        } catch (e){
-          holder.innerHTML = `<div class="kolrrhh-errbox">${escapeHtml(e.message)}</div>`;
-        }
-      }
     }
 
-
     if (localesBtn) {
-      localesBtn.addEventListener('click', async function(ev){
+      localesBtn.addEventListener('click', function(ev){
         ev.preventDefault();
         __VIEW_MODE__ = 'locales';
         clearEmployeeSelection();
         toggleTabs(false);
-        await renderLocalesPanel();
+        renderLocalesPanel();
       });
     }
 
@@ -2115,33 +1982,34 @@ if (typeof moneyAR === 'function'){
           return;
         }
 
-      const rolSel = qs('kolrrhh-sueldo-rol');
-      if (rolSel) rolSel.addEventListener('change', refreshBaseFromDB);
+        const rolSel = qs('kolrrhh-sueldo-rol');
+if (rolSel) rolSel.addEventListener('change', refreshBaseFromDB);
 
-        const horasSel = qs('kolrrhh-sueldo-horas');
-        if (horasSel) horasSel.addEventListener('change', refreshBaseFromDB);
+const horasSel = qs('kolrrhh-sueldo-horas');
+if (horasSel) horasSel.addEventListener('change', refreshBaseFromDB);
 
-        const iniSel = qs('kolrrhh-sueldo-periodo-inicio');
-        if (iniSel) iniSel.addEventListener('change', refreshComisionFromDB);
 
-        const areaSel = qs('kolrrhh-sueldo-area');
-        if (areaSel) areaSel.addEventListener('change', refreshComisionFromDB);
-        if (areaSel) {
-          areaSel.addEventListener('change', () => {
-            const partRaw = getVal('kolrrhh-sueldo-participacion') || '0';
-            const participacion = parseFloat(partRaw.replace(',', '.')) || 0;
+const iniSel = qs('kolrrhh-sueldo-periodo-inicio');
+if (iniSel) iniSel.addEventListener('change', () => { refreshComisionFromDB(); refreshDesempenoFromState(); });
 
-            const factor = getComisionFactorByArea(areaSel.value);
+const areaSel = qs('kolrrhh-sueldo-area');
+if (areaSel) areaSel.addEventListener('change', refreshComisionFromDB);
+if (areaSel) {
+  areaSel.addEventListener('change', () => {
+    const partRaw = getVal('kolrrhh-sueldo-participacion') || '0';
+    const participacion = parseFloat(partRaw.replace(',', '.')) || 0;
 
-            const comisionFinal =
-              __CURRENT_COMISION__ * (participacion / 100) * factor;
+    const factor = getComisionFactorByArea(areaSel.value);
 
-            setText('kolrrhh-sueldo-comision', moneyAR(comisionFinal));
-          });
-        }
+    const comisionFinal =
+      __CURRENT_COMISION__ * (participacion / 100) * factor;
 
-        const finSel = qs('kolrrhh-sueldo-periodo-fin');
-        if (finSel) finSel.addEventListener('change', () => { refreshAntigFromState(); refreshComisionFromDB(); });
+    setText('kolrrhh-sueldo-comision', moneyAR(comisionFinal));
+  });
+}
+
+const finSel = qs('kolrrhh-sueldo-periodo-fin');
+if (finSel) finSel.addEventListener('change', () => { refreshAntigFromState(); refreshComisionFromDB(); refreshDesempenoFromState(); });
 
         saveBtn.disabled = true;
         const oldText = saveBtn.textContent;
