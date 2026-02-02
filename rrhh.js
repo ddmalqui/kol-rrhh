@@ -16,6 +16,7 @@
   let __VIEW_MODE__ = 'employees'; // employees | locales
   let __CURRENT_ULTIMO_INGRESO__ = '';
   let __CURRENT_BASE__ = 0;
+  const __DESEMPENO_FACTOR__ = 0.5; // TODO: reemplazar por valor de la BBDD
 
 let __CURRENT_COMISION__ = 0;
 const KOL_RRHH_ROLES = [
@@ -1223,6 +1224,20 @@ function refreshAntigFromState(){
   );
 }
 
+function refreshDesempenoFromState(){
+  if (!__CURRENT_BASE__) {
+    setText('kolrrhh-sueldo-desempeno', '$0');
+    return;
+  }
+
+  const desempeno = Number(__CURRENT_BASE__ || 0) * __DESEMPENO_FACTOR__;
+
+  setText(
+    'kolrrhh-sueldo-desempeno',
+    (typeof moneyAR === 'function') ? moneyAR(desempeno) : ('$' + desempeno.toFixed(2))
+  );
+}
+
 async function refreshBaseFromDB(){
   const rol = getVal('kolrrhh-sueldo-rol');
   const horas = getVal('kolrrhh-sueldo-horas');
@@ -1232,6 +1247,7 @@ async function refreshBaseFromDB(){
     __CURRENT_BASE__ = 0;
     setText('kolrrhh-sueldo-base', '$0');
     refreshAntigFromState();
+    refreshDesempenoFromState();
     return;
   }
 
@@ -1249,6 +1265,7 @@ async function refreshBaseFromDB(){
       __CURRENT_BASE__ = 0;
       setText('kolrrhh-sueldo-base', '$0');
       refreshAntigFromState();
+      refreshDesempenoFromState();
       return;
     }
 
@@ -1260,11 +1277,13 @@ async function refreshBaseFromDB(){
     // En tu render usás moneyAR(...), así que lo reutilizo:
     setText('kolrrhh-sueldo-base', (typeof moneyAR === 'function') ? moneyAR(base) : ('$' + base));
     refreshAntigFromState();
+    refreshDesempenoFromState();
   }catch(e){
     console.error(e);
     __CURRENT_BASE__ = 0;
     setText('kolrrhh-sueldo-base', '$0');
     refreshAntigFromState();
+    refreshDesempenoFromState();
   }
 }
 
