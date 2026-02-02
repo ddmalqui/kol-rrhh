@@ -19,6 +19,7 @@ final class KOL_RRHH_Plugin {
     add_action('wp_ajax_kol_rrhh_get_sueldo_items', [$this,'ajax_get_sueldo_items']);
     add_action('wp_ajax_kol_rrhh_save_sueldo_item', [$this,'ajax_save_sueldo_item']);
     add_action('wp_ajax_kol_rrhh_get_desempeno_items', [$this,'ajax_get_desempeno_items']);
+    add_action('wp_ajax_kol_rrhh_get_desempeno_locales', [$this,'ajax_get_desempeno_locales']);
     add_action('wp_ajax_kol_rrhh_save_desempeno_item', [$this,'ajax_save_desempeno_item']);
     add_action('wp_ajax_kol_rrhh_delete_desempeno_item', [$this,'ajax_delete_desempeno_item']);
     add_action('wp_ajax_kol_rrhh_get_fichaje_html', [$this,'ajax_get_fichaje_html']);
@@ -735,6 +736,82 @@ public function ajax_get_desempeno_items(){
   );
 
   wp_send_json_success(['rows' => $rows ?: []]);
+}
+
+public function ajax_get_desempeno_locales(){
+  check_ajax_referer('kol_rrhh_nonce', 'nonce');
+  if (!is_user_logged_in()) {
+    wp_send_json_error(['message' => 'No autorizado']);
+  }
+
+  global $wpdb;
+  $t_desempeno = $wpdb->prefix . 'kol_rrhh_desempeno_locales';
+  $t_locales = $wpdb->prefix . 'kol_locales';
+
+  $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $t_desempeno));
+  if ($exists !== $t_desempeno) {
+    wp_send_json_success(['rows' => []]);
+  }
+
+  $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $t_locales));
+  if ($exists !== $t_locales) {
+    wp_send_json_error(['message' => 'No existe la tabla de locales.']);
+  }
+
+  $cols_d = $wpdb->get_col("SHOW COLUMNS FROM {$t_desempeno}", 0) ?: [];
+  $cols_l = $wpdb->get_col("SHOW COLUMNS FROM {$t_locales}", 0) ?: [];
+
+  $colAnio = in_array('anio', $cols_d, true) ? 'anio' : (in_array('año', $cols_d, true) ? 'año' : '');
+  $colMes = in_array('mes', $cols_d, true) ? 'mes' : '';
+  $colLocalId = '';
+  foreach (['local_id','id_local','locales_id','id_locales','local'] as $c){
+    if (in_array($c, $cols_d, true)) { $colLocalId = $c; break; }
+  }
+  $colControl = '';
+  foreach (['control_caja_pct','control_caja','control_pct'] as $c){
+    if (in_array($c, $cols_d, true)) { $colControl = $c; break; }
+  }
+  $colObjetivos = '';
+  foreach (['objetivos_pct','objetivo_pct','objetivos'] as $c){
+    if (in_array($c, $cols_d, true)) { $colObjetivos = $c; break; }
+  }
+  $colCompras = '';
+  foreach (['compras_pct','compra_pct','compras'] as $c){
+    if (in_array($c, $cols_d, true)) { $colCompras = $c; break; }
+  }
+  $colTotal = '';
+  foreach (['total_pct','total'] as $c){
+    if (in_array($c, $cols_d, true)) { $colTotal = $c; break; }
+  }
+  $colComision = '';
+  foreach (['comision_coef','comision','coeficiente_comision'] as $c){
+    if (in_array($c, $cols_d, true)) { $colComision = $c; break; }
+  }
+
+  $colLocId = in_array('id', $cols_l, true) ? 'id' : '';
+  $colLocName = in_array('nombre', $cols_l, true) ? 'nombre' : (in_array('name', $cols_l, true) ? 'name' : '');
+
+  if (!$colAnio || !$colMes || !$colLocalId || !$colControl || !$colObjetivos || !$colCompras || !$colTotal || !$colComision || !$colLocId || !$colLocName){
+    wp_send_json_error(['message' => 'No se pudieron detectar columnas necesarias en desempeño/locales.']);
+  }
+
+  $sql = "
+    SELECT
+      d.{$colAnio} AS anio,
+      d.{$colMes} AS mes,
+      l.{$colLocName} AS local_nombre,
+      d.{$colControl} AS control_caja_pct,
+      d.{$colObjetivos} AS objetivos_pct,
+      d.{$colCompras} AS compras_pct,
+      d.{$colTotal} AS total_pct,
+      d.{$colComision} AS comision_coef
+    FROM {$t_desempeno} d
+    LEFT JOIN {$t_locales} l ON l.{$colLocId} = d.{$colLocalId}
+    ORDER BY d.{$colAnio} DESC, d.{$colMes} DESC, l.{$colLocName} ASC
+  ";
+
+  $rows = $wpdb->get_results($sql, ARRAY_A) ?: [];
+  wp_send_json_success(['rows' => $rows]);
 }
 
 public function ajax_get_base(){

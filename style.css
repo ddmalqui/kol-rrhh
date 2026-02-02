@@ -1057,6 +1057,44 @@
   border: 1px solid rgba(0,0,0,.06);
   overflow:hidden;
 }
+.kolrrhh-locales-body{
+  margin-top: 12px;
+}
+.kolrrhh-locales-groups{
+  display:flex;
+  flex-direction:column;
+  gap: 16px;
+}
+.kolrrhh-locales-block{
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,.06);
+  padding: 14px;
+}
+.kolrrhh-locales-block .kolrrhh-tablewrap{
+  border: 1px solid rgba(0,0,0,.08);
+  background: #fff;
+}
+.kolrrhh-locales-month{
+  font-weight: 900;
+  font-size: 13px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #444;
+  margin-bottom: 10px;
+}
+.kolrrhh-locales-table th,
+.kolrrhh-locales-table td{
+  text-align: center;
+}
+.kolrrhh-locales-table th:first-child,
+.kolrrhh-locales-table td:first-child{
+  text-align: left;
+}
+.kolrrhh-locales-name-cell{
+  font-weight: 800;
+  color: #3f3f3f;
+}
 .kolrrhh-locales-row{
   display:flex;
   align-items:center;
