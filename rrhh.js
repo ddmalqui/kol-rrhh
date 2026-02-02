@@ -16,6 +16,7 @@
   let __VIEW_MODE__ = 'employees'; // employees | locales
   let __CURRENT_ULTIMO_INGRESO__ = '';
   let __CURRENT_BASE__ = 0;
+  let __CURRENT_DESEMPENO_ROWS__ = [];
 
 let __CURRENT_COMISION__ = 0;
 const KOL_RRHH_ROLES = [
@@ -575,7 +576,9 @@ async function loadDesempenoForLegajo(legajoNum){
       }
 
       const rows = (json.data.rows || []);
+      __CURRENT_DESEMPENO_ROWS__ = rows;
       renderDesempenoTable(rows);
+      refreshDesempenoFromState();
     }catch(err){
       console.error(err);
       if (host) host.textContent = 'Error de red/servidor al cargar.';
@@ -601,6 +604,34 @@ async function loadDesempenoForLegajo(legajoNum){
     }
 
     return s || '—';
+  }
+
+  function getMesKey(iso){
+    const s = String(iso || '').trim();
+    const m = s.match(/^(\d{4})-(\d{2})(?:-\d{2})?$/);
+    if (!m) return '';
+    return `${m[1]}-${m[2]}`;
+  }
+
+  function getDesempenoPctFromRows(periodoISO){
+    const mesKey = getMesKey(periodoISO);
+    if (!mesKey) return 0;
+
+    const rows = __CURRENT_DESEMPENO_ROWS__ || [];
+    const match = rows.find(r => getMesKey(r.mes) === mesKey);
+    if (!match) return 0;
+
+    const raw = match.desempeno ?? 0;
+    const pct = parseFloat(String(raw).replace(',', '.'));
+    return isFinite(pct) ? pct : 0;
+  }
+
+  function refreshDesempenoFromState(){
+    const base = Number(__CURRENT_BASE__ || 0);
+    const periodo = getVal('kolrrhh-sueldo-periodo-inicio') || getVal('kolrrhh-sueldo-periodo-fin');
+    const pct = getDesempenoPctFromRows(periodo);
+    const total = base * (pct / 100);
+    setText('kolrrhh-sueldo-desempeno', (typeof moneyAR === 'function') ? moneyAR(total) : ('$' + String(total)));
   }
 
   function parseInasistencias(val){
@@ -1121,6 +1152,7 @@ if (partSel) {
     // ✅ Traer Base desde la tabla (según Rol + Horas)
     refreshBaseFromDB();
     refreshComisionFromDB();
+    refreshDesempenoFromState();
 
     clearSueldoError();
 
@@ -1232,6 +1264,7 @@ async function refreshBaseFromDB(){
     __CURRENT_BASE__ = 0;
     setText('kolrrhh-sueldo-base', '$0');
     refreshAntigFromState();
+    refreshDesempenoFromState();
     return;
   }
 
@@ -1249,6 +1282,7 @@ async function refreshBaseFromDB(){
       __CURRENT_BASE__ = 0;
       setText('kolrrhh-sueldo-base', '$0');
       refreshAntigFromState();
+      refreshDesempenoFromState();
       return;
     }
 
@@ -1260,11 +1294,13 @@ async function refreshBaseFromDB(){
     // En tu render usás moneyAR(...), así que lo reutilizo:
     setText('kolrrhh-sueldo-base', (typeof moneyAR === 'function') ? moneyAR(base) : ('$' + base));
     refreshAntigFromState();
+    refreshDesempenoFromState();
   }catch(e){
     console.error(e);
     __CURRENT_BASE__ = 0;
     setText('kolrrhh-sueldo-base', '$0');
     refreshAntigFromState();
+    refreshDesempenoFromState();
   }
 }
 
@@ -1954,7 +1990,7 @@ if (horasSel) horasSel.addEventListener('change', refreshBaseFromDB);
 
 
 const iniSel = qs('kolrrhh-sueldo-periodo-inicio');
-if (iniSel) iniSel.addEventListener('change', refreshComisionFromDB);
+if (iniSel) iniSel.addEventListener('change', () => { refreshComisionFromDB(); refreshDesempenoFromState(); });
 
 const areaSel = qs('kolrrhh-sueldo-area');
 if (areaSel) areaSel.addEventListener('change', refreshComisionFromDB);
@@ -1973,7 +2009,7 @@ if (areaSel) {
 }
 
 const finSel = qs('kolrrhh-sueldo-periodo-fin');
-if (finSel) finSel.addEventListener('change', () => { refreshAntigFromState(); refreshComisionFromDB(); });
+if (finSel) finSel.addEventListener('change', () => { refreshAntigFromState(); refreshComisionFromDB(); refreshDesempenoFromState(); });
 
         saveBtn.disabled = true;
         const oldText = saveBtn.textContent;
