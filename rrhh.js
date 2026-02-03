@@ -199,6 +199,16 @@ const NO_REMUNERATIVO_FACTOR = 0.6;
       .replace(/'/g, '&#39;');
   }
 
+  function closeInfoPopovers(exceptId){
+    document.querySelectorAll('.kolrrhh-popover.is-open').forEach(pop => {
+      if (exceptId && pop.id === exceptId) return;
+      pop.classList.remove('is-open');
+      pop.setAttribute('aria-hidden', 'true');
+      const trigger = document.querySelector(`.kolrrhh-info-btn[aria-controls="${pop.id}"]`);
+      if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    });
+  }
+
   function toIntLegajo(v) {
     const n = String(v ?? '').replace(/\D+/g, '');
     return n ? parseInt(n, 10) : 0;
@@ -1813,6 +1823,36 @@ async function refreshPresentismoDesempeno(){
 
     });
 
+    document.addEventListener('click', function(ev){
+      const trigger = ev.target.closest('.kolrrhh-info-btn');
+      if (trigger) {
+        ev.preventDefault();
+        const targetId = trigger.getAttribute('aria-controls');
+        const pop = targetId ? qs(targetId) : null;
+        if (!pop) return;
+        const isOpen = pop.classList.contains('is-open');
+        closeInfoPopovers(targetId);
+        if (!isOpen) {
+          pop.classList.add('is-open');
+          pop.setAttribute('aria-hidden', 'false');
+          trigger.setAttribute('aria-expanded', 'true');
+        } else {
+          pop.classList.remove('is-open');
+          pop.setAttribute('aria-hidden', 'true');
+          trigger.setAttribute('aria-expanded', 'false');
+        }
+        return;
+      }
+
+      if (!ev.target.closest('.kolrrhh-popover')) {
+        closeInfoPopovers();
+      }
+    });
+
+    document.addEventListener('keydown', function(ev){
+      if (ev.key === 'Escape') closeInfoPopovers();
+    });
+
     const addBtn = qs('kolrrhh-add');
     if (addBtn) {
       addBtn.addEventListener('click', function (ev) {
@@ -1852,6 +1892,17 @@ async function refreshPresentismoDesempeno(){
     function renderLocalesPanel(){
       const el = qs('kolrrhh-detail');
       if (!el) return;
+
+      const list = (typeof KOL_RRHH !== 'undefined' && Array.isArray(KOL_RRHH.locales)) ? KOL_RRHH.locales : [];
+      const rows = (list && list.length)
+        ? list.map((name, i) => `
+            <div class="kolrrhh-locales-row">
+              <div class="kolrrhh-locales-name">${escapeHtml(String(name || '—'))}</div>
+              <div class="kolrrhh-locales-chip">LOCAL</div>
+            </div>
+          `).join('')
+        : `<div class="kolrrhh-muted" style="padding:14px;">No hay locales cargados.</div>`;
+
       el.innerHTML = `
         <div class="kolrrhh-locales-head">
           <div>
