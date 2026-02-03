@@ -198,6 +198,16 @@ const PRESENTISMO_FACTOR = 1 / 12;
       .replace(/'/g, '&#39;');
   }
 
+  function closeInfoPopovers(exceptId){
+    document.querySelectorAll('.kolrrhh-popover.is-open').forEach(pop => {
+      if (exceptId && pop.id === exceptId) return;
+      pop.classList.remove('is-open');
+      pop.setAttribute('aria-hidden', 'true');
+      const trigger = document.querySelector(`.kolrrhh-info-btn[aria-controls="${pop.id}"]`);
+      if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    });
+  }
+
   function toIntLegajo(v) {
     const n = String(v ?? '').replace(/\D+/g, '');
     return n ? parseInt(n, 10) : 0;
@@ -1793,6 +1803,36 @@ async function refreshPresentismoDesempeno(){
          initFichajeUI();
        }
 
+    });
+
+    document.addEventListener('click', function(ev){
+      const trigger = ev.target.closest('.kolrrhh-info-btn');
+      if (trigger) {
+        ev.preventDefault();
+        const targetId = trigger.getAttribute('aria-controls');
+        const pop = targetId ? qs(targetId) : null;
+        if (!pop) return;
+        const isOpen = pop.classList.contains('is-open');
+        closeInfoPopovers(targetId);
+        if (!isOpen) {
+          pop.classList.add('is-open');
+          pop.setAttribute('aria-hidden', 'false');
+          trigger.setAttribute('aria-expanded', 'true');
+        } else {
+          pop.classList.remove('is-open');
+          pop.setAttribute('aria-hidden', 'true');
+          trigger.setAttribute('aria-expanded', 'false');
+        }
+        return;
+      }
+
+      if (!ev.target.closest('.kolrrhh-popover')) {
+        closeInfoPopovers();
+      }
+    });
+
+    document.addEventListener('keydown', function(ev){
+      if (ev.key === 'Escape') closeInfoPopovers();
     });
 
     const addBtn = qs('kolrrhh-add');
