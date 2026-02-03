@@ -746,11 +746,16 @@ public function ajax_get_desempeno_locales(){
 
   global $wpdb;
   $t_desempeno = $wpdb->prefix . 'kol_rrhh_desempeno_locales';
+  $t_alt_desempeno = $wpdb->prefix . 'kol_rrhh_rendimiento_locales';
   $t_locales = $wpdb->prefix . 'kol_locales';
 
   $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $t_desempeno));
   if ($exists !== $t_desempeno) {
-    wp_send_json_success(['rows' => []]);
+    $exists_alt = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $t_alt_desempeno));
+    if ($exists_alt !== $t_alt_desempeno) {
+      wp_send_json_success(['rows' => []]);
+    }
+    $t_desempeno = $t_alt_desempeno;
   }
 
   $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $t_locales));
@@ -789,25 +794,36 @@ public function ajax_get_desempeno_locales(){
   }
 
   $colLocId = in_array('id', $cols_l, true) ? 'id' : '';
-  $colLocName = in_array('nombre', $cols_l, true) ? 'nombre' : (in_array('name', $cols_l, true) ? 'name' : '');
+  foreach (['local_id','id_local','locales_id','id_locales'] as $c){
+    if ($colLocId !== '') break;
+    if (in_array($c, $cols_l, true)) { $colLocId = $c; break; }
+  }
+  $colLocName = '';
+  foreach (['nombre','name','local','local_nombre','nombre_local','descripcion'] as $c){
+    if (in_array($c, $cols_l, true)) { $colLocName = $c; break; }
+  }
 
-  if (!$colAnio || !$colMes || !$colLocalId || !$colControl || !$colObjetivos || !$colCompras || !$colTotal || !$colComision || !$colLocId || !$colLocName){
+  $useLocalJoin = ($colLocId !== '' && $colLocName !== '');
+
+  if (!$colAnio || !$colMes || !$colLocalId || !$colControl || !$colObjetivos || !$colCompras || !$colTotal || !$colComision || (!$useLocalJoin && !$colLocalId)){
     wp_send_json_error(['message' => 'No se pudieron detectar columnas necesarias en desempeño/locales.']);
   }
+
+  $localNameExpr = $useLocalJoin ? "l.{$colLocName}" : "d.{$colLocalId}";
 
   $sql = "
     SELECT
       d.{$colAnio} AS anio,
       d.{$colMes} AS mes,
-      l.{$colLocName} AS local_nombre,
+      {$localNameExpr} AS local_nombre,
       d.{$colControl} AS control_caja_pct,
       d.{$colObjetivos} AS objetivos_pct,
       d.{$colCompras} AS compras_pct,
       d.{$colTotal} AS total_pct,
       d.{$colComision} AS comision_coef
     FROM {$t_desempeno} d
-    LEFT JOIN {$t_locales} l ON l.{$colLocId} = d.{$colLocalId}
-    ORDER BY d.{$colAnio} DESC, d.{$colMes} DESC, l.{$colLocName} ASC
+    " . ($useLocalJoin ? "LEFT JOIN {$t_locales} l ON l.{$colLocId} = d.{$colLocalId}" : "") . "
+    ORDER BY d.{$colAnio} DESC, d.{$colMes} DESC, {$localNameExpr} ASC
   ";
 
   $rows = $wpdb->get_results($sql, ARRAY_A) ?: [];

@@ -1834,27 +1834,122 @@ async function refreshPresentismoDesempeno(){
     function renderLocalesPanel(){
       const el = qs('kolrrhh-detail');
       if (!el) return;
-
-      const list = (typeof KOL_RRHH !== 'undefined' && Array.isArray(KOL_RRHH.locales)) ? KOL_RRHH.locales : [];
-      const rows = (list && list.length)
-        ? list.map((name, i) => `
-            <div class="kolrrhh-locales-row">
-              <div class="kolrrhh-locales-name">${escapeHtml(String(name || '—'))}</div>
-              <div class="kolrrhh-locales-chip">LOCAL</div>
-            </div>
-          `).join('')
-        : `<div class="kolrrhh-muted" style="padding:14px;">No hay locales cargados.</div>`;
-
       el.innerHTML = `
         <div class="kolrrhh-locales-head">
           <div>
             <div class="kolrrhh-locales-title">Locales</div>
-            <div class="kolrrhh-locales-sub">Listado de locales (solo vista por ahora)</div>
+            <div class="kolrrhh-locales-sub">Rendimiento por año/mes</div>
           </div>
           <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary kolrrhh-btn-small" id="kolrrhh-locales-back">Volver</button>
         </div>
-        <div class="kolrrhh-locales-list">${rows}</div>
+        <div class="kolrrhh-locales-body">
+          <div class="kolrrhh-muted" style="padding:14px;">Cargando rendimiento...</div>
+        </div>
       `;
+
+      loadRendimientoLocales();
+    }
+
+    function normalizeMesLabel(value){
+      const raw = String(value ?? '').trim();
+      if (!raw) return '';
+      if (/^\d{4}-\d{2}/.test(raw)) {
+        return raw.slice(0, 7).replace('-', '/');
+      }
+      const m = parseInt(raw, 10);
+      if (!Number.isNaN(m) && m >= 1 && m <= 12) {
+        return String(m).padStart(2, '0');
+      }
+      return raw;
+    }
+
+    function buildRendimientoTable(rows){
+      if (!rows || !rows.length) {
+        return `<div class="kolrrhh-muted" style="padding:14px;">No hay datos de rendimiento para mostrar.</div>`;
+      }
+
+      const grouped = {};
+      rows.forEach((row) => {
+        const anio = row.anio ?? '';
+        const mesRaw = row.mes ?? '';
+        const mesLabel = normalizeMesLabel(mesRaw);
+        const monthKey = String(mesLabel).padStart(2, '0');
+        const key = `${anio}-${monthKey}`;
+        if (!grouped[key]) {
+          grouped[key] = {
+            label: `${anio}/${monthKey || mesLabel || ''}`,
+            anio: parseInt(anio, 10) || 0,
+            mes: parseInt(monthKey, 10) || 0,
+            rows: []
+          };
+        }
+        grouped[key].rows.push(row);
+      });
+
+      const groups = Object.values(grouped).sort((a, b) => {
+        if (a.anio !== b.anio) return b.anio - a.anio;
+        return b.mes - a.mes;
+      });
+
+      return `
+        <div class="kolrrhh-locales-groups">
+          ${groups.map(group => `
+            <div class="kolrrhh-locales-block">
+              <div class="kolrrhh-locales-month">${escapeHtml(group.label)}</div>
+              <div class="kolrrhh-tablewrap">
+                <table class="kolrrhh-table kolrrhh-locales-table">
+                  <thead>
+                    <tr>
+                      <th>Textos completos</th>
+                      <th>Nombre local</th>
+                      <th>Control caja %</th>
+                      <th>Objetivos %</th>
+                      <th>Compras %</th>
+                      <th>Total %</th>
+                      <th>Comisión coef</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${group.rows.map(r => `
+                      <tr>
+                        <td class="kolrrhh-locales-name-cell">${escapeHtml(String(r.textos_completos ?? '—'))}</td>
+                        <td>${escapeHtml(String(r.local_nombre ?? '—'))}</td>
+                        <td>${escapeHtml(String(r.control_caja_pct ?? '—'))}</td>
+                        <td>${escapeHtml(String(r.objetivos_pct ?? '—'))}</td>
+                        <td>${escapeHtml(String(r.compras_pct ?? '—'))}</td>
+                        <td>${escapeHtml(String(r.total_pct ?? '—'))}</td>
+                        <td>${escapeHtml(String(r.comision_coef ?? '—'))}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    async function loadRendimientoLocales(){
+      const body = document.querySelector('.kolrrhh-locales-body');
+      if (!body) return;
+
+      const fd = new FormData();
+      fd.append('action', 'kol_rrhh_get_desempeno_locales');
+      fd.append('nonce', AJAX_NONCE);
+
+      try {
+        const res = await fetch(AJAX_URL, { method: 'POST', body: fd, credentials: 'same-origin' });
+        const data = await res.json();
+        if (!data || !data.success) {
+          const msg = data?.data?.message || 'No se pudo cargar el rendimiento.';
+          body.innerHTML = `<div class="kolrrhh-muted" style="padding:14px;">${escapeHtml(msg)}</div>`;
+          return;
+        }
+        body.innerHTML = buildRendimientoTable(data.data?.rows || []);
+      } catch (err) {
+        body.innerHTML = `<div class="kolrrhh-muted" style="padding:14px;">Error al cargar el rendimiento.</div>`;
+      }
     }
 
     if (localesBtn) {
