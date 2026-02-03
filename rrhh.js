@@ -1834,27 +1834,142 @@ async function refreshPresentismoDesempeno(){
     function renderLocalesPanel(){
       const el = qs('kolrrhh-detail');
       if (!el) return;
-
-      const list = (typeof KOL_RRHH !== 'undefined' && Array.isArray(KOL_RRHH.locales)) ? KOL_RRHH.locales : [];
-      const rows = (list && list.length)
-        ? list.map((name, i) => `
-            <div class="kolrrhh-locales-row">
-              <div class="kolrrhh-locales-name">${escapeHtml(String(name || '—'))}</div>
-              <div class="kolrrhh-locales-chip">LOCAL</div>
-            </div>
-          `).join('')
-        : `<div class="kolrrhh-muted" style="padding:14px;">No hay locales cargados.</div>`;
-
+      const subtitle = 'Desempeño mensual de locales';
       el.innerHTML = `
         <div class="kolrrhh-locales-head">
           <div>
             <div class="kolrrhh-locales-title">Locales</div>
-            <div class="kolrrhh-locales-sub">Listado de locales (solo vista por ahora)</div>
+            <div class="kolrrhh-locales-sub">${escapeHtml(subtitle)}</div>
           </div>
           <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary kolrrhh-btn-small" id="kolrrhh-locales-back">Volver</button>
         </div>
-        <div class="kolrrhh-locales-list">${rows}</div>
+        <div class="kolrrhh-locales-body">
+          <div class="kolrrhh-muted" style="padding:14px;">Cargando desempeño de locales...</div>
+        </div>
       `;
+    }
+
+    function formatMesAnioUpper(anio, mes){
+      const months = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+      const yy = parseInt(anio, 10);
+      const mm = parseInt(mes, 10);
+      if (!yy || !(mm >= 1 && mm <= 12)) return '—';
+      return `${months[mm - 1] || String(mes)} ${yy}`;
+    }
+
+    function formatDecimal(val, digits){
+      if (val === null || val === undefined || val === '') return '—';
+      const n = Number(String(val).replace(',', '.'));
+      if (Number.isNaN(n)) return String(val);
+      return n.toFixed(digits).replace('.', ',');
+    }
+
+    function renderLocalesRows(rows){
+      if (!rows || rows.length === 0){
+        return `<div class="kolrrhh-muted" style="padding:14px;">No hay datos de desempeño de locales.</div>`;
+      }
+
+      const groups = new Map();
+      rows.forEach(r => {
+        const yy = String(r.anio ?? '').trim();
+        const mm = String(r.mes ?? '').padStart(2, '0');
+        const key = `${yy}-${mm}`;
+        if (!groups.has(key)) {
+          groups.set(key, { anio: yy, mes: mm, rows: [] });
+        }
+        groups.get(key).rows.push(r);
+      });
+
+      const blocks = Array.from(groups.values()).map(group => {
+        const title = formatMesAnioUpper(group.anio, group.mes);
+        const trs = group.rows.map(r => {
+          const name = r.local_nombre || r.local || r.nombre || '—';
+          const control = formatDecimal(r.control_caja_pct, 2);
+          const objetivos = formatDecimal(r.objetivos_pct, 2);
+          const compras = formatDecimal(r.compras_pct, 2);
+          const total = formatDecimal(r.total_pct, 2);
+          const comision = formatDecimal(r.comision_coef, 3);
+
+          const controlTxt = control === '—' ? '—' : `${control}%`;
+          const objetivosTxt = objetivos === '—' ? '—' : `${objetivos}%`;
+          const comprasTxt = compras === '—' ? '—' : `${compras}%`;
+          const totalTxt = total === '—' ? '—' : `${total}%`;
+
+          return `
+            <tr>
+              <td class="kolrrhh-locales-name-cell">${escapeHtml(String(name))}</td>
+              <td>${escapeHtml(controlTxt)}</td>
+              <td>${escapeHtml(objetivosTxt)}</td>
+              <td>${escapeHtml(comprasTxt)}</td>
+              <td>${escapeHtml(totalTxt)}</td>
+              <td>${escapeHtml(String(comision))}</td>
+            </tr>
+          `;
+        }).join('');
+
+        return `
+          <div class="kolrrhh-locales-block">
+            <div class="kolrrhh-locales-month">${escapeHtml(title)}</div>
+            <div class="kolrrhh-tablewrap">
+              <table class="kolrrhh-table kolrrhh-locales-table">
+                <thead>
+                  <tr>
+                    <th>Nombre local</th>
+                    <th>Control caja</th>
+                    <th>Objetivos</th>
+                    <th>Compras</th>
+                    <th>Total</th>
+                    <th>Comisión</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${trs}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      return `<div class="kolrrhh-locales-groups">${blocks}</div>`;
+    }
+
+    async function loadLocalesDesempeno(){
+      const el = qs('kolrrhh-detail');
+      if (!el) return;
+      const bodyEl = el.querySelector('.kolrrhh-locales-body');
+      if (!bodyEl) return;
+
+      if (!AJAX_URL) {
+        const err = '<div class="kolrrhh-alert kolrrhh-alert-error">Falta configuración AJAX.</div>';
+        bodyEl.innerHTML = err;
+        return;
+      }
+
+      try{
+        const body = new URLSearchParams();
+        body.set('action', 'kol_rrhh_get_desempeno_locales');
+        body.set('nonce', AJAX_NONCE);
+
+        const res = await fetch(AJAX_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+          body: body.toString()
+        });
+
+        const json = await res.json();
+        if (!json || !json.success) {
+          const msg = json?.data?.message || 'Error al cargar locales.';
+          bodyEl.innerHTML = `<div class="kolrrhh-alert kolrrhh-alert-error">${escapeHtml(msg)}</div>`;
+          return;
+        }
+
+        const rows = json?.data?.rows || [];
+        bodyEl.innerHTML = renderLocalesRows(rows);
+      }catch(err){
+        console.error(err);
+        bodyEl.innerHTML = '<div class="kolrrhh-alert kolrrhh-alert-error">Error de red al cargar locales.</div>';
+      }
     }
 
     if (localesBtn) {
@@ -1864,6 +1979,7 @@ async function refreshPresentismoDesempeno(){
         clearEmployeeSelection();
         toggleTabs(false);
         renderLocalesPanel();
+        loadLocalesDesempeno();
       });
     }
 
