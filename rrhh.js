@@ -15,6 +15,7 @@
   let __CURRENT_CLOVER_PAIRS__ = [];
   let __VIEW_MODE__ = 'employees'; // employees | locales
   let __CURRENT_ULTIMO_INGRESO__ = '';
+  let __CURRENT_VINCULO_ANTIG__ = '';
   let __CURRENT_BASE__ = 0;
   let __CURRENT_DESEMPENO_ROWS__ = [];
 
@@ -248,6 +249,7 @@ const NO_REMUNERATIVO_FACTOR = 0.6;
       ciudad: e.ciudad ?? e.Ciudad ?? '',
       fecha_nacimiento: e.fecha_nacimiento ?? e.fechaNacimiento ?? e.nacimiento ?? e.Nacimiento ?? '',
       ultima_fecha_ingreso: e.ultima_fecha_ingreso ?? e.ultimaFechaIngreso ?? e.ultimo_ingreso ?? e.ultimoIngreso ?? '',
+      vinculo_para_antiguedad: e.vinculo_para_antiguedad ?? e.vinculoParaAntiguedad ?? e.vinculo_antiguedad ?? '',
       categoria: e.categoria ?? e.Categoria ?? '',
       clover_employee_id: e.clover_employee_id ?? e.cloverEmployeeId ?? '',
 
@@ -266,6 +268,7 @@ const NO_REMUNERATIVO_FACTOR = 0.6;
     // Guardar Clover ID actual (para fichaje)
     __CURRENT_CLOVER_ID__ = String(emp?.clover_employee_id || '').trim();
     __CURRENT_ULTIMO_INGRESO__ = String(emp?.ultima_fecha_ingreso || '').trim();
+    __CURRENT_VINCULO_ANTIG__ = String(emp?.vinculo_para_antiguedad || '').trim();
 
     if (!emp || (!emp.id && !emp.nombre && !emp.legajo)) {
       el.innerHTML = '<div style="padding:14px;opacity:.7">Seleccioná un empleado</div>';
@@ -1231,7 +1234,7 @@ function yearsVencidos(ingresoISO, refISO) {
 }
 
 function refreshAntigFromState(){
-  const ingreso = String(__CURRENT_ULTIMO_INGRESO__ || '').trim();
+  const ingreso = String(__CURRENT_VINCULO_ANTIG__ || '').trim();
 
   if (!ingreso || !__CURRENT_BASE__) {
     setText('kolrrhh-sueldo-antig', '$0');
@@ -1673,6 +1676,7 @@ async function refreshPresentismoDesempeno(){
     // Guardar Clover ID actual (para fichaje)
     __CURRENT_CLOVER_ID__ = String(emp?.clover_employee_id || '').trim();
     __CURRENT_ULTIMO_INGRESO__ = String(emp?.ultima_fecha_ingreso || '').trim();
+    __CURRENT_VINCULO_ANTIG__ = String(emp?.vinculo_para_antiguedad || '').trim();
 
     let legajoNum = 0;
 
