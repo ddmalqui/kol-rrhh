@@ -745,7 +745,7 @@ public function ajax_get_desempeno_locales(){
   }
 
   global $wpdb;
-  $t_desempeno = $wpdb->prefix . 'kol_rrhh_desempeno_locales';
+  $t_desempeno = $wpdb->prefix . 'kol_rrhh_rendimiento_locales';
   $t_locales = $wpdb->prefix . 'kol_locales';
 
   $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $t_desempeno));
@@ -761,7 +761,7 @@ public function ajax_get_desempeno_locales(){
   $cols_d = $wpdb->get_col("SHOW COLUMNS FROM {$t_desempeno}", 0) ?: [];
   $cols_l = $wpdb->get_col("SHOW COLUMNS FROM {$t_locales}", 0) ?: [];
 
-  $colAnio = in_array('anio', $cols_d, true) ? 'anio' : (in_array('año', $cols_d, true) ? 'año' : '');
+  $colAnio = in_array('ano', $cols_d, true) ? 'ano' : (in_array('anio', $cols_d, true) ? 'anio' : (in_array('año', $cols_d, true) ? 'año' : ''));
   $colMes = in_array('mes', $cols_d, true) ? 'mes' : '';
   $colLocalId = '';
   foreach (['local_id','id_local','locales_id','id_locales','local'] as $c){
@@ -787,11 +787,15 @@ public function ajax_get_desempeno_locales(){
   foreach (['comision_coef','comision','coeficiente_comision'] as $c){
     if (in_array($c, $cols_d, true)) { $colComision = $c; break; }
   }
+  $colTexto = '';
+  foreach (['textos_completos','texto_completo','texto'] as $c){
+    if (in_array($c, $cols_d, true)) { $colTexto = $c; break; }
+  }
 
   $colLocId = in_array('id', $cols_l, true) ? 'id' : '';
   $colLocName = in_array('nombre', $cols_l, true) ? 'nombre' : (in_array('name', $cols_l, true) ? 'name' : '');
 
-  if (!$colAnio || !$colMes || !$colLocalId || !$colControl || !$colObjetivos || !$colCompras || !$colTotal || !$colComision || !$colLocId || !$colLocName){
+  if (!$colAnio || !$colMes || !$colLocalId || !$colControl || !$colObjetivos || !$colCompras || !$colTotal || !$colComision || !$colLocId || !$colLocName || !$colTexto){
     wp_send_json_error(['message' => 'No se pudieron detectar columnas necesarias en desempeño/locales.']);
   }
 
@@ -799,6 +803,7 @@ public function ajax_get_desempeno_locales(){
     SELECT
       d.{$colAnio} AS anio,
       d.{$colMes} AS mes,
+      d.{$colTexto} AS textos_completos,
       l.{$colLocName} AS local_nombre,
       d.{$colControl} AS control_caja_pct,
       d.{$colObjetivos} AS objetivos_pct,
