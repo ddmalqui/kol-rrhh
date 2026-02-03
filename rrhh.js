@@ -26,6 +26,7 @@ const KOL_RRHH_ROLES = [
   'Responsable pedidos','Responsable stock'
 ];
 const PRESENTISMO_FACTOR = 1 / 12;
+const NO_REMUNERATIVO_FACTOR = 0.6;
 
   function buildParticipacionOptions(){
     const opts = [];
@@ -1239,6 +1240,19 @@ function refreshAntigFromState(){
   );
 }
 
+function refreshNoRemFromState(){
+  if (!__CURRENT_BASE__) {
+    setText('kolrrhh-sueldo-no-rem', '$0');
+    return;
+  }
+
+  const noRem = __CURRENT_BASE__ * NO_REMUNERATIVO_FACTOR;
+  setText(
+    'kolrrhh-sueldo-no-rem',
+    (typeof moneyAR === 'function') ? moneyAR(noRem) : ('$' + noRem.toFixed(2))
+  );
+}
+
 async function refreshBaseFromDB(){
   const rol = getVal('kolrrhh-sueldo-rol');
   const horas = getVal('kolrrhh-sueldo-horas');
@@ -1248,6 +1262,7 @@ async function refreshBaseFromDB(){
     __CURRENT_BASE__ = 0;
     setText('kolrrhh-sueldo-base', '$0');
     refreshAntigFromState();
+    refreshNoRemFromState();
     refreshPresentismoDesempeno();
     return;
   }
@@ -1266,6 +1281,7 @@ async function refreshBaseFromDB(){
     __CURRENT_BASE__ = 0;
     setText('kolrrhh-sueldo-base', '$0');
     refreshAntigFromState();
+    refreshNoRemFromState();
     refreshPresentismoDesempeno();
     return;
   }
@@ -1278,12 +1294,14 @@ async function refreshBaseFromDB(){
     // En tu render usás moneyAR(...), así que lo reutilizo:
     setText('kolrrhh-sueldo-base', (typeof moneyAR === 'function') ? moneyAR(base) : ('$' + base));
     refreshAntigFromState();
+    refreshNoRemFromState();
     refreshPresentismoDesempeno();
   }catch(e){
     console.error(e);
     __CURRENT_BASE__ = 0;
     setText('kolrrhh-sueldo-base', '$0');
     refreshAntigFromState();
+    refreshNoRemFromState();
     refreshPresentismoDesempeno();
   }
 }
@@ -1842,15 +1860,15 @@ async function refreshPresentismoDesempeno(){
           </div>
           <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary kolrrhh-btn-small" id="kolrrhh-locales-back">Volver</button>
         </div>
-        <div class="kolrrhh-locales-body">
+          <div class="kolrrhh-locales-body">
           <div class="kolrrhh-muted" style="padding:14px;">Cargando rendimiento...</div>
         </div>
       `;
 
       loadRendimientoLocales();
-    }
+      }
 
-    function normalizeMesLabel(value){
+      function normalizeMesLabel(value){
       const raw = String(value ?? '').trim();
       if (!raw) return '';
       if (/^\d{4}-\d{2}/.test(raw)) {
