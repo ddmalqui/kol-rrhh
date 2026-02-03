@@ -572,24 +572,84 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
           <div id="kolrrhh-base-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">base:</div>
           <div id="kolrrhh-sueldo-base" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
-        <div class="kolrrhh-form-field">
-          <label class="kolrrhh-modal-label">Antig.</label>
+        <div class="kolrrhh-form-field kolrrhh-form-field--with-popover">
+          <div class="kolrrhh-modal-label-row">
+            <label class="kolrrhh-modal-label">Antig.</label>
+            <button
+              type="button"
+              class="kolrrhh-info-btn"
+              aria-label="Más información sobre antigüedad"
+              aria-expanded="false"
+              aria-controls="kolrrhh-antig-popover"
+            >
+              i
+            </button>
+          </div>
+          <div id="kolrrhh-antig-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">antigüedad:</div>
           <div id="kolrrhh-sueldo-antig" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
-        <div class="kolrrhh-form-field">
-          <label class="kolrrhh-modal-label">Comisión</label>
+        <div class="kolrrhh-form-field kolrrhh-form-field--with-popover">
+          <div class="kolrrhh-modal-label-row">
+            <label class="kolrrhh-modal-label">Comisión</label>
+            <button
+              type="button"
+              class="kolrrhh-info-btn"
+              aria-label="Más información sobre comisión"
+              aria-expanded="false"
+              aria-controls="kolrrhh-comision-popover"
+            >
+              i
+            </button>
+          </div>
+          <div id="kolrrhh-comision-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">comisión:</div>
           <div id="kolrrhh-sueldo-comision" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
-        <div class="kolrrhh-form-field">
-          <label class="kolrrhh-modal-label">Presentismo</label>
+        <div class="kolrrhh-form-field kolrrhh-form-field--with-popover">
+          <div class="kolrrhh-modal-label-row">
+            <label class="kolrrhh-modal-label">Presentismo</label>
+            <button
+              type="button"
+              class="kolrrhh-info-btn"
+              aria-label="Más información sobre presentismo"
+              aria-expanded="false"
+              aria-controls="kolrrhh-presentismo-popover"
+            >
+              i
+            </button>
+          </div>
+          <div id="kolrrhh-presentismo-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">presentismo:</div>
           <div id="kolrrhh-sueldo-presentismo" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
-        <div class="kolrrhh-form-field">
-          <label class="kolrrhh-modal-label">Desempeño</label>
+        <div class="kolrrhh-form-field kolrrhh-form-field--with-popover">
+          <div class="kolrrhh-modal-label-row">
+            <label class="kolrrhh-modal-label">Desempeño</label>
+            <button
+              type="button"
+              class="kolrrhh-info-btn"
+              aria-label="Más información sobre desempeño"
+              aria-expanded="false"
+              aria-controls="kolrrhh-desempeno-popover"
+            >
+              i
+            </button>
+          </div>
+          <div id="kolrrhh-desempeno-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">desempeño:</div>
           <div id="kolrrhh-sueldo-desempeno" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
-        <div class="kolrrhh-form-field">
-          <label class="kolrrhh-modal-label">No remunerativo</label>
+        <div class="kolrrhh-form-field kolrrhh-form-field--with-popover">
+          <div class="kolrrhh-modal-label-row">
+            <label class="kolrrhh-modal-label">No rem.</label>
+            <button
+              type="button"
+              class="kolrrhh-info-btn"
+              aria-label="Más información sobre no remunerativo"
+              aria-expanded="false"
+              aria-controls="kolrrhh-no-rem-popover"
+            >
+              i
+            </button>
+          </div>
+          <div id="kolrrhh-no-rem-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">no remunerativo:</div>
           <div id="kolrrhh-sueldo-no-rem" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
       </div>
