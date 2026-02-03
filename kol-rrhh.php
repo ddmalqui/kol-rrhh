@@ -585,7 +585,9 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
               i
             </button>
           </div>
-          <div id="kolrrhh-antig-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">antigüedad:</div>
+          <div id="kolrrhh-antig-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">
+            Antigüedad = 0,01 × años completos × base × (días trabajados / 26).
+          </div>
           <div id="kolrrhh-sueldo-antig" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
         <div class="kolrrhh-form-field kolrrhh-form-field--with-popover">

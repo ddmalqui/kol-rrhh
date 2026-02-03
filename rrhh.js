@@ -1242,7 +1242,11 @@ function refreshAntigFromState(){
   const refISO = getVal('kolrrhh-sueldo-periodo-fin') || '';
 
   const years = yearsVencidos(ingreso, refISO);
-  const antig = Number(__CURRENT_BASE__ || 0) * 0.01 * years;
+  const diasRaw = String(getVal('kolrrhh-sueldo-dias-trabajo') || '').trim();
+  const diasNormalizado = diasRaw.replace(',', '.');
+  const diasTrabajados = diasNormalizado ? parseFloat(diasNormalizado) : 0;
+  const proporcionDias = Math.max(0, isFinite(diasTrabajados) ? diasTrabajados : 0) / 26;
+  const antig = Number(__CURRENT_BASE__ || 0) * 0.01 * years * proporcionDias;
 
   setText(
     'kolrrhh-sueldo-antig',
