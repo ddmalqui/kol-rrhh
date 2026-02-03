@@ -16,6 +16,7 @@
   let __VIEW_MODE__ = 'employees'; // employees | locales
   let __CURRENT_ULTIMO_INGRESO__ = '';
   let __CURRENT_BASE__ = 0;
+  let __CURRENT_DESEMPENO_ROWS__ = [];
 
 let __CURRENT_COMISION__ = 0;
 const KOL_RRHH_ROLES = [
@@ -24,6 +25,7 @@ const KOL_RRHH_ROLES = [
   'Recursos Humanos','Entrenamiento','Responsable compras',
   'Responsable pedidos','Responsable stock'
 ];
+const PRESENTISMO_FACTOR = 1 / 12;
 
   function buildParticipacionOptions(){
     const opts = [];
@@ -64,6 +66,16 @@ const KOL_RRHH_ROLES = [
   function getVal(id){
     const el = qs(id);
     return el ? String(el.value || '').trim() : '';
+  }
+
+  function getPeriodoMesISO(){
+    const fin = getVal('kolrrhh-sueldo-periodo-fin');
+    const ini = getVal('kolrrhh-sueldo-periodo-inicio');
+    const ref = fin || ini;
+    if (!ref) return '';
+    const m = String(ref).match(/^(\d{4})-(\d{2})/);
+    if (!m) return '';
+    return `${m[1]}-${m[2]}`;
   }
 
   function validarPeriodoSueldo(fechaInicio, fechaFin) {
@@ -575,7 +587,9 @@ async function loadDesempenoForLegajo(legajoNum){
       }
 
       const rows = (json.data.rows || []);
+      __CURRENT_DESEMPENO_ROWS__ = rows;
       renderDesempenoTable(rows);
+      refreshPresentismoDesempeno();
     }catch(err){
       console.error(err);
       if (host) host.textContent = 'Error de red/servidor al cargar.';
@@ -1118,6 +1132,8 @@ if (partSel) {
     ['kolrrhh-sueldo-base','kolrrhh-sueldo-antig','kolrrhh-sueldo-comision','kolrrhh-sueldo-presentismo','kolrrhh-sueldo-desempeno','kolrrhh-sueldo-no-rem']
       .forEach(id => setText(id, '$0'));
 
+    __CURRENT_DESEMPENO_ROWS__ = [];
+
     // ✅ Traer Base desde la tabla (según Rol + Horas)
     refreshBaseFromDB();
     refreshComisionFromDB();
@@ -1232,6 +1248,7 @@ async function refreshBaseFromDB(){
     __CURRENT_BASE__ = 0;
     setText('kolrrhh-sueldo-base', '$0');
     refreshAntigFromState();
+    refreshPresentismoDesempeno();
     return;
   }
 
@@ -1246,11 +1263,12 @@ async function refreshBaseFromDB(){
     const json = await res.json();
 
     if (!json || !json.success){
-      __CURRENT_BASE__ = 0;
-      setText('kolrrhh-sueldo-base', '$0');
-      refreshAntigFromState();
-      return;
-    }
+    __CURRENT_BASE__ = 0;
+    setText('kolrrhh-sueldo-base', '$0');
+    refreshAntigFromState();
+    refreshPresentismoDesempeno();
+    return;
+  }
 
     const base = Number(json.data?.base || 0);
 
@@ -1260,11 +1278,13 @@ async function refreshBaseFromDB(){
     // En tu render usás moneyAR(...), así que lo reutilizo:
     setText('kolrrhh-sueldo-base', (typeof moneyAR === 'function') ? moneyAR(base) : ('$' + base));
     refreshAntigFromState();
+    refreshPresentismoDesempeno();
   }catch(e){
     console.error(e);
     __CURRENT_BASE__ = 0;
     setText('kolrrhh-sueldo-base', '$0');
     refreshAntigFromState();
+    refreshPresentismoDesempeno();
   }
 }
 
@@ -1382,6 +1402,70 @@ if (typeof moneyAR === 'function'){
   } catch(e){
     __CURRENT_COMISION__ = 0;
     setText('kolrrhh-sueldo-comision', '$0');
+  }
+}
+
+async function fetchDesempenoRows(legajoNum){
+  if (!legajoNum) return [];
+  if (typeof KOL_RRHH === 'undefined' || !KOL_RRHH.ajaxurl) return [];
+
+  const body = new URLSearchParams();
+  body.set('action', 'kol_rrhh_get_desempeno_items');
+  body.set('nonce', KOL_RRHH.nonce);
+  body.set('legajo', String(legajoNum));
+
+  const res = await fetch(KOL_RRHH.ajaxurl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+    body: body.toString()
+  });
+
+  const json = await res.json();
+  if (!json || !json.success || !json.data || !Array.isArray(json.data.rows)) return [];
+  return json.data.rows;
+}
+
+async function refreshPresentismoDesempeno(){
+  const legajo = Number(getVal('kolrrhh-sueldo-legajo') || __CURRENT_LEGAJO__ || 0);
+  const mesISO = getPeriodoMesISO();
+
+  if (!legajo || !mesISO || !__CURRENT_BASE__) {
+    setText('kolrrhh-sueldo-presentismo', '$0');
+    setText('kolrrhh-sueldo-desempeno', '$0');
+    return;
+  }
+
+  try{
+    if (!__CURRENT_DESEMPENO_ROWS__ || __CURRENT_DESEMPENO_ROWS__.length === 0) {
+      __CURRENT_DESEMPENO_ROWS__ = await fetchDesempenoRows(legajo);
+    }
+
+    const row = (__CURRENT_DESEMPENO_ROWS__ || []).find(r => {
+      const m = String(r.mes || '').match(/^(\d{4})-(\d{2})/);
+      if (!m) return false;
+      return `${m[1]}-${m[2]}` === mesISO;
+    });
+
+    if (!row) {
+      setText('kolrrhh-sueldo-presentismo', '$0');
+      setText('kolrrhh-sueldo-desempeno', '$0');
+      return;
+    }
+
+    const inas = parseInasistencias(row.inasistencias);
+    const presentismo = (inas.length === 0)
+      ? (__CURRENT_BASE__ * PRESENTISMO_FACTOR)
+      : 0;
+
+    const desPct = Number(String(row.desempeno ?? '').replace(',', '.')) || 0;
+    const desempeno = __CURRENT_BASE__ * (desPct / 100);
+
+    setText('kolrrhh-sueldo-presentismo', moneyAR(presentismo));
+    setText('kolrrhh-sueldo-desempeno', moneyAR(desempeno));
+  }catch(e){
+    console.error(e);
+    setText('kolrrhh-sueldo-presentismo', '$0');
+    setText('kolrrhh-sueldo-desempeno', '$0');
   }
 }
 
@@ -1954,7 +2038,10 @@ if (horasSel) horasSel.addEventListener('change', refreshBaseFromDB);
 
 
 const iniSel = qs('kolrrhh-sueldo-periodo-inicio');
-if (iniSel) iniSel.addEventListener('change', refreshComisionFromDB);
+if (iniSel) iniSel.addEventListener('change', () => {
+  refreshComisionFromDB();
+  refreshPresentismoDesempeno();
+});
 
 const areaSel = qs('kolrrhh-sueldo-area');
 if (areaSel) areaSel.addEventListener('change', refreshComisionFromDB);
@@ -1973,7 +2060,11 @@ if (areaSel) {
 }
 
 const finSel = qs('kolrrhh-sueldo-periodo-fin');
-if (finSel) finSel.addEventListener('change', () => { refreshAntigFromState(); refreshComisionFromDB(); });
+if (finSel) finSel.addEventListener('change', () => {
+  refreshAntigFromState();
+  refreshComisionFromDB();
+  refreshPresentismoDesempeno();
+});
 
         saveBtn.disabled = true;
         const oldText = saveBtn.textContent;
