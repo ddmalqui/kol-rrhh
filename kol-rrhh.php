@@ -556,8 +556,20 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
 
 
       <div class="kolrrhh-form-row" style="--cols:6;">
-        <div class="kolrrhh-form-field">
-          <label class="kolrrhh-modal-label">Base</label>
+        <div class="kolrrhh-form-field kolrrhh-form-field--with-popover">
+          <div class="kolrrhh-modal-label-row">
+            <label class="kolrrhh-modal-label">Base</label>
+            <button
+              type="button"
+              class="kolrrhh-info-btn"
+              aria-label="Más información sobre base"
+              aria-expanded="false"
+              aria-controls="kolrrhh-base-popover"
+            >
+              i
+            </button>
+          </div>
+          <div id="kolrrhh-base-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">base:</div>
           <div id="kolrrhh-sueldo-base" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
         <div class="kolrrhh-form-field">
