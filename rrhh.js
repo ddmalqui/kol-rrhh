@@ -1490,13 +1490,9 @@ async function refreshDesempenoPersonalDesempeno(){
       return;
     }
 
-    const inas = parseInasistencias(row.inasistencias);
-    const desempenoPersonal = (inas.length === 0)
-      ? (__CURRENT_BASE__ * RENDIMIENTO_FACTOR)
-      : 0;
-
     const desPct = Number(String(row.desempeno ?? '').replace(',', '.')) || 0;
     const desempeno = __CURRENT_BASE__ * (desPct / 100);
+    const desempenoPersonal = desempeno;
 
     setText('kolrrhh-sueldo-desempeno-personal', moneyAR(desempenoPersonal));
     setText('kolrrhh-sueldo-rendimiento', moneyAR(desempeno));
