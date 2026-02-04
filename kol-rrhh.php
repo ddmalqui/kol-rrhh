@@ -603,7 +603,9 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
               i
             </button>
           </div>
-          <div id="kolrrhh-comision-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">comisión:</div>
+          <div id="kolrrhh-comision-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">
+            Comisión = ventas del mes × coeficiente × factor (0,01 o 0,005 si es Dep) × participación.
+          </div>
           <div id="kolrrhh-sueldo-comision" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
         <div class="kolrrhh-form-field kolrrhh-form-field--with-popover">

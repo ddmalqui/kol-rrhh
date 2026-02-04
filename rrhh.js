@@ -89,7 +89,9 @@ const NO_REMUNERATIVO_FACTOR = 0.6;
 
   function renderComisionFromState(){
     const participacion = getParticipacionValue();
-    const comisionFinal = __CURRENT_COMISION_BASE__ * participacion;
+    const area = getVal('kolrrhh-sueldo-area');
+    const factor = area === 'Dep' ? 0.005 : 0.01;
+    const comisionFinal = __CURRENT_COMISION_BASE__ * factor * participacion;
     __CURRENT_COMISION__ = isFinite(comisionFinal) ? comisionFinal : 0;
     if (typeof moneyAR === 'function'){
       setText('kolrrhh-sueldo-comision', moneyAR(__CURRENT_COMISION__));
@@ -1428,7 +1430,7 @@ async function refreshComisionFromDB(){
       ? Number(json.data.comision_coef || 0)
       : 0;
 
-    const comisionBase = ventas * comisionCoef * 0.01;
+    const comisionBase = ventas * comisionCoef;
     __CURRENT_COMISION_BASE__ = isFinite(comisionBase) ? comisionBase : 0;
 
     // Mostrar
