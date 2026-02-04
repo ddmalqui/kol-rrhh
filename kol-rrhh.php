@@ -1470,6 +1470,7 @@ $clover_employee_id = preg_replace('/\s*,\s*/', ',', $clover_employee_id);
         'ciudad' => (string)($e['ciudad'] ?? ''),
         'fecha_nacimiento' => (string)($e['fecha_nacimiento'] ?? ''),
         'ultima_fecha_ingreso' => (string)($e['ultima_fecha_ingreso'] ?? ''),
+        'vinculo_para_antiguedad' => (string)($e['vinculo_para_antiguedad'] ?? ''),
         'clover_employee_id' => (string)($e['clover_employee_id'] ?? ''),
         'cbu' => (string)($e['cbu'] ?? ''),
       ];

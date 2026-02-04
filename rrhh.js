@@ -2148,13 +2148,13 @@ async function refreshPresentismoDesempeno(){
         const ciudad = (qs('kolrrhh-modal-ciudad')?.value || '').trim(); // select
         const estado = (qs('kolrrhh-modal-estado')?.value || 'ACTIVO').trim();
 
-        // Nacimiento: date input (ISO) -> DD/MM/AAAA
+        // Nacimiento: date input (ISO YYYY-MM-DD)
         const nacISO = (qs('kolrrhh-modal-fecha_nacimiento')?.value || '').trim();
-        const fecha_nacimiento = nacISO ? isoToDMY(nacISO) : '';
+        const fecha_nacimiento = nacISO;
 
-        // Último ingreso: date input (ISO) -> DD/MM/AAAA
+        // Último ingreso: date input (ISO YYYY-MM-DD)
         const ultISO = (qs('kolrrhh-modal-ultima_fecha_ingreso')?.value || '').trim();
-        const ultima_fecha_ingreso = ultISO ? isoToDMY(ultISO) : '';
+        const ultima_fecha_ingreso = ultISO;
 
         // CBU: solo números
         let cbu = (qs('kolrrhh-modal-cbu')?.value || '').trim();
