@@ -995,8 +995,9 @@ public function ajax_get_comision(){
   // Tablas
   $t_locales = $wpdb->prefix . 'kol_locales';
   $t_ventas  = $wpdb->prefix . 'kol_ventas_mensuales';
+  $t_rend    = $wpdb->prefix . 'kol_rrhh_rendimiento_locales';
 
-  foreach ([$t_locales, $t_ventas] as $t){
+  foreach ([$t_locales, $t_ventas, $t_rend] as $t){
     $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $t));
     if ($exists !== $t){
       wp_send_json_error(['message' => "No existe la tabla {$t}."]);
@@ -1006,6 +1007,7 @@ public function ajax_get_comision(){
   // Columnas (flexible)
   $cols_l = $wpdb->get_col("SHOW COLUMNS FROM {$t_locales}", 0) ?: [];
   $cols_v = $wpdb->get_col("SHOW COLUMNS FROM {$t_ventas}", 0) ?: [];
+  $cols_r = $wpdb->get_col("SHOW COLUMNS FROM {$t_rend}", 0) ?: [];
 
   $colLocId   = in_array('id', $cols_l, true) ? 'id' : '';
   $colLocName = in_array('nombre', $cols_l, true) ? 'nombre' : (in_array('name', $cols_l, true) ? 'name' : '');
@@ -1021,28 +1023,75 @@ public function ajax_get_comision(){
     if (in_array($c, $cols_v, true)) { $colVentaMonto = $c; break; }
   }
 
+  $colRendAnio = in_array('anio', $cols_r, true) ? 'anio' : (in_array('año', $cols_r, true) ? 'año' : '');
+  $colRendMes  = in_array('mes', $cols_r, true) ? 'mes' : '';
+  $colRendLoc = '';
+  foreach (['local_id','id_local','locales_id','id_locales','local'] as $c){
+    if (in_array($c, $cols_r, true)) { $colRendLoc = $c; break; }
+  }
+  $colRendComision = '';
+  foreach (['comision_coef','comision','coeficiente_comision'] as $c){
+    if (in_array($c, $cols_r, true)) { $colRendComision = $c; break; }
+  }
+
   if (!$colLocId || !$colLocName || !$colVentaLoc || !$colVentaAnio || !$colVentaMes || !$colVentaMonto){
     wp_send_json_error(['message' => 'No se pudieron detectar columnas necesarias en locales/ventas_mensuales.']);
+  }
+  if (!$colRendAnio || !$colRendMes || !$colRendLoc || !$colRendComision){
+    wp_send_json_error(['message' => 'No se pudieron detectar columnas necesarias en rendimiento_locales.']);
+  }
+
+  $local_id = $wpdb->get_var(
+    $wpdb->prepare("SELECT {$colLocId} FROM {$t_locales} WHERE {$colLocName} = %s LIMIT 1", $area)
+  );
+
+  if (!$local_id){
+    wp_send_json_success(['ventas' => 0, 'comision_coef' => 0, 'comision' => 0]);
   }
 
   $sql = "
     SELECT v.{$colVentaMonto} AS ventas
     FROM {$t_ventas} v
-    INNER JOIN {$t_locales} l ON l.{$colLocId} = v.{$colVentaLoc}
-    WHERE l.{$colLocName} = %s
+    WHERE v.{$colVentaLoc} = %d
       AND v.{$colVentaAnio} = %d
       AND v.{$colVentaMes} = %d
     LIMIT 1
   ";
 
-  $row = $wpdb->get_row($wpdb->prepare($sql, $area, $anio, $mes), ARRAY_A);
+  $row = $wpdb->get_row($wpdb->prepare($sql, $local_id, $anio, $mes), ARRAY_A);
 
   $ventas = 0;
   if ($row && isset($row['ventas'])){
     $ventas = floatval(str_replace(',', '.', (string)$row['ventas']));
   }
 
-  wp_send_json_success(['ventas' => $ventas]);
+  $row = $wpdb->get_row(
+    $wpdb->prepare(
+      "SELECT r.{$colRendComision} AS comision_coef
+       FROM {$t_rend} r
+       WHERE r.{$colRendLoc} = %d
+         AND r.{$colRendAnio} = %d
+         AND r.{$colRendMes} = %d
+       LIMIT 1",
+      $local_id,
+      $anio,
+      $mes
+    ),
+    ARRAY_A
+  );
+
+  $comision_coef = 0;
+  if ($row && isset($row['comision_coef'])){
+    $comision_coef = floatval(str_replace(',', '.', (string)$row['comision_coef']));
+  }
+
+  $comision = $ventas * $comision_coef;
+
+  wp_send_json_success([
+    'ventas' => $ventas,
+    'comision_coef' => $comision_coef,
+    'comision' => $comision,
+  ]);
 }
 public function ajax_save_desempeno_item(){
   if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
