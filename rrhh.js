@@ -1917,8 +1917,7 @@ async function refreshPresentismoDesempeno(){
       el.innerHTML = `
         <div class="kolrrhh-locales-head">
           <div>
-            <div class="kolrrhh-locales-title">Locales</div>
-            <div class="kolrrhh-locales-sub">Rendimiento por año/mes</div>
+            <div class="kolrrhh-locales-title">RENDIMIENTO</div>
           </div>
           <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary kolrrhh-btn-small" id="kolrrhh-locales-back">Volver</button>
         </div>
