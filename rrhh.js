@@ -21,6 +21,7 @@
 
 let __CURRENT_COMISION__ = 0;
 let __CURRENT_COMISION_BASE__ = 0;
+let __CURRENT_RENDIMIENTO_COEF__ = 0;
 const KOL_RRHH_ROLES = [
   'Auxiliar','Vendedor','Responsable vendedor','Responsable Global',
   'Responsable del local','Administracion','Tecnico','Redes',
@@ -1388,7 +1389,9 @@ async function refreshComisionFromDB(){
     if (!area || !fin){
       __CURRENT_COMISION__ = 0;
       __CURRENT_COMISION_BASE__ = 0;
+      __CURRENT_RENDIMIENTO_COEF__ = 0;
       setText('kolrrhh-sueldo-comision', '$0');
+      refreshDesempenoPersonalDesempeno();
       return;
     }
 
@@ -1398,7 +1401,9 @@ async function refreshComisionFromDB(){
     if (!esLocal){
       __CURRENT_COMISION__ = 0;
       __CURRENT_COMISION_BASE__ = 0;
+      __CURRENT_RENDIMIENTO_COEF__ = 0;
       setText('kolrrhh-sueldo-comision', '$0');
+      refreshDesempenoPersonalDesempeno();
       return;
     }
 
@@ -1406,7 +1411,9 @@ async function refreshComisionFromDB(){
     if (!m){
       __CURRENT_COMISION__ = 0;
       __CURRENT_COMISION_BASE__ = 0;
+      __CURRENT_RENDIMIENTO_COEF__ = 0;
       setText('kolrrhh-sueldo-comision', '$0');
+      refreshDesempenoPersonalDesempeno();
       return;
     }
 
@@ -1432,14 +1439,18 @@ async function refreshComisionFromDB(){
 
     const comisionBase = ventas * comisionCoef;
     __CURRENT_COMISION_BASE__ = isFinite(comisionBase) ? comisionBase : 0;
+    __CURRENT_RENDIMIENTO_COEF__ = isFinite(comisionCoef) ? comisionCoef : 0;
 
     // Mostrar
     renderComisionFromState();
+    refreshDesempenoPersonalDesempeno();
 
   } catch(e){
     __CURRENT_COMISION__ = 0;
     __CURRENT_COMISION_BASE__ = 0;
+    __CURRENT_RENDIMIENTO_COEF__ = 0;
     setText('kolrrhh-sueldo-comision', '$0');
+    refreshDesempenoPersonalDesempeno();
   }
 }
 
@@ -1467,13 +1478,21 @@ async function refreshDesempenoPersonalDesempeno(){
   const legajo = Number(getVal('kolrrhh-sueldo-legajo') || __CURRENT_LEGAJO__ || 0);
   const mesISO = getPeriodoMesISO();
 
-  if (!legajo || !mesISO || !__CURRENT_BASE__) {
+  if (!__CURRENT_BASE__) {
     setText('kolrrhh-sueldo-desempeno-personal', '$0');
     setText('kolrrhh-sueldo-rendimiento', '$0');
     return;
   }
 
   try{
+    const rendimiento = __CURRENT_BASE__ * (Number(__CURRENT_RENDIMIENTO_COEF__ || 0));
+    setText('kolrrhh-sueldo-rendimiento', moneyAR(rendimiento));
+
+    if (!legajo || !mesISO) {
+      setText('kolrrhh-sueldo-desempeno-personal', '$0');
+      return;
+    }
+
     if (!__CURRENT_DESEMPENO_ROWS__ || __CURRENT_DESEMPENO_ROWS__.length === 0) {
       __CURRENT_DESEMPENO_ROWS__ = await fetchDesempenoRows(legajo);
     }
@@ -1486,20 +1505,17 @@ async function refreshDesempenoPersonalDesempeno(){
 
     if (!row) {
       setText('kolrrhh-sueldo-desempeno-personal', '$0');
-      setText('kolrrhh-sueldo-rendimiento', '$0');
       return;
     }
 
     const desPct = Number(String(row.desempeno ?? '').replace(',', '.')) || 0;
-    const desempeno = __CURRENT_BASE__ * (desPct / 100);
-    const desempenoPersonal = desempeno;
+    const desempenoPersonal = __CURRENT_BASE__ * (desPct / 100);
 
     setText('kolrrhh-sueldo-desempeno-personal', moneyAR(desempenoPersonal));
-    setText('kolrrhh-sueldo-rendimiento', moneyAR(desempeno));
   }catch(e){
     console.error(e);
     setText('kolrrhh-sueldo-desempeno-personal', '$0');
-    setText('kolrrhh-sueldo-rendimiento', '$0');
+    setText('kolrrhh-sueldo-rendimiento', moneyAR(__CURRENT_BASE__ * (Number(__CURRENT_RENDIMIENTO_COEF__ || 0))));
   }
 }
 
