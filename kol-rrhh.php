@@ -585,7 +585,9 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
               i
             </button>
           </div>
-          <div id="kolrrhh-antig-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">antigüedad:</div>
+          <div id="kolrrhh-antig-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">
+            Antigüedad = 0,01 × años completos × base × (días trabajados / 26).
+          </div>
           <div id="kolrrhh-sueldo-antig" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
         <div class="kolrrhh-form-field kolrrhh-form-field--with-popover">
@@ -1468,6 +1470,7 @@ $clover_employee_id = preg_replace('/\s*,\s*/', ',', $clover_employee_id);
         'ciudad' => (string)($e['ciudad'] ?? ''),
         'fecha_nacimiento' => (string)($e['fecha_nacimiento'] ?? ''),
         'ultima_fecha_ingreso' => (string)($e['ultima_fecha_ingreso'] ?? ''),
+        'vinculo_para_antiguedad' => (string)($e['vinculo_para_antiguedad'] ?? ''),
         'clover_employee_id' => (string)($e['clover_employee_id'] ?? ''),
         'cbu' => (string)($e['cbu'] ?? ''),
       ];

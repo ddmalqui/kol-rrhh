@@ -15,6 +15,7 @@
   let __CURRENT_CLOVER_PAIRS__ = [];
   let __VIEW_MODE__ = 'employees'; // employees | locales
   let __CURRENT_ULTIMO_INGRESO__ = '';
+  let __CURRENT_VINCULO_ANTIG__ = '';
   let __CURRENT_BASE__ = 0;
   let __CURRENT_DESEMPENO_ROWS__ = [];
 
@@ -248,6 +249,7 @@ const NO_REMUNERATIVO_FACTOR = 0.6;
       ciudad: e.ciudad ?? e.Ciudad ?? '',
       fecha_nacimiento: e.fecha_nacimiento ?? e.fechaNacimiento ?? e.nacimiento ?? e.Nacimiento ?? '',
       ultima_fecha_ingreso: e.ultima_fecha_ingreso ?? e.ultimaFechaIngreso ?? e.ultimo_ingreso ?? e.ultimoIngreso ?? '',
+      vinculo_para_antiguedad: e.vinculo_para_antiguedad ?? e.vinculoParaAntiguedad ?? e.vinculo_antiguedad ?? '',
       categoria: e.categoria ?? e.Categoria ?? '',
       clover_employee_id: e.clover_employee_id ?? e.cloverEmployeeId ?? '',
 
@@ -266,6 +268,7 @@ const NO_REMUNERATIVO_FACTOR = 0.6;
     // Guardar Clover ID actual (para fichaje)
     __CURRENT_CLOVER_ID__ = String(emp?.clover_employee_id || '').trim();
     __CURRENT_ULTIMO_INGRESO__ = String(emp?.ultima_fecha_ingreso || '').trim();
+    __CURRENT_VINCULO_ANTIG__ = String(emp?.vinculo_para_antiguedad || '').trim();
 
     if (!emp || (!emp.id && !emp.nombre && !emp.legajo)) {
       el.innerHTML = '<div style="padding:14px;opacity:.7">Seleccioná un empleado</div>';
@@ -1231,7 +1234,7 @@ function yearsVencidos(ingresoISO, refISO) {
 }
 
 function refreshAntigFromState(){
-  const ingreso = String(__CURRENT_ULTIMO_INGRESO__ || '').trim();
+  const ingreso = String(__CURRENT_VINCULO_ANTIG__ || '').trim();
 
   if (!ingreso || !__CURRENT_BASE__) {
     setText('kolrrhh-sueldo-antig', '$0');
@@ -1242,7 +1245,11 @@ function refreshAntigFromState(){
   const refISO = getVal('kolrrhh-sueldo-periodo-fin') || '';
 
   const years = yearsVencidos(ingreso, refISO);
-  const antig = Number(__CURRENT_BASE__ || 0) * 0.01 * years;
+  const diasRaw = String(getVal('kolrrhh-sueldo-dias-trabajo') || '').trim();
+  const diasNormalizado = diasRaw.replace(',', '.');
+  const diasTrabajados = diasNormalizado ? parseFloat(diasNormalizado) : 0;
+  const proporcionDias = Math.max(0, isFinite(diasTrabajados) ? diasTrabajados : 0) / 26;
+  const antig = Number(__CURRENT_BASE__ || 0) * 0.01 * years * proporcionDias;
 
   setText(
     'kolrrhh-sueldo-antig',
@@ -1669,6 +1676,7 @@ async function refreshPresentismoDesempeno(){
     // Guardar Clover ID actual (para fichaje)
     __CURRENT_CLOVER_ID__ = String(emp?.clover_employee_id || '').trim();
     __CURRENT_ULTIMO_INGRESO__ = String(emp?.ultima_fecha_ingreso || '').trim();
+    __CURRENT_VINCULO_ANTIG__ = String(emp?.vinculo_para_antiguedad || '').trim();
 
     let legajoNum = 0;
 
@@ -2140,13 +2148,13 @@ async function refreshPresentismoDesempeno(){
         const ciudad = (qs('kolrrhh-modal-ciudad')?.value || '').trim(); // select
         const estado = (qs('kolrrhh-modal-estado')?.value || 'ACTIVO').trim();
 
-        // Nacimiento: date input (ISO) -> DD/MM/AAAA
+        // Nacimiento: date input (ISO YYYY-MM-DD)
         const nacISO = (qs('kolrrhh-modal-fecha_nacimiento')?.value || '').trim();
-        const fecha_nacimiento = nacISO ? isoToDMY(nacISO) : '';
+        const fecha_nacimiento = nacISO;
 
-        // Último ingreso: date input (ISO) -> DD/MM/AAAA
+        // Último ingreso: date input (ISO YYYY-MM-DD)
         const ultISO = (qs('kolrrhh-modal-ultima_fecha_ingreso')?.value || '').trim();
-        const ultima_fecha_ingreso = ultISO ? isoToDMY(ultISO) : '';
+        const ultima_fecha_ingreso = ultISO;
 
         // CBU: solo números
         let cbu = (qs('kolrrhh-modal-cbu')?.value || '').trim();
