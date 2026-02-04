@@ -623,7 +623,7 @@ async function loadDesempenoForLegajo(legajoNum){
       const rows = (json.data.rows || []);
       __CURRENT_DESEMPENO_ROWS__ = rows;
       renderDesempenoTable(rows);
-      refreshPresentismoDesempeno();
+      refreshDesempenoPersonalDesempeno();
     }catch(err){
       console.error(err);
       if (host) host.textContent = 'Error de red/servidor al cargar.';
@@ -1154,7 +1154,7 @@ if (partSel) {
       });
 
     // reset labels calculados (UI)
-    ['kolrrhh-sueldo-base','kolrrhh-sueldo-antig','kolrrhh-sueldo-comision','kolrrhh-sueldo-presentismo','kolrrhh-sueldo-desempeno','kolrrhh-sueldo-no-rem']
+    ['kolrrhh-sueldo-base','kolrrhh-sueldo-antig','kolrrhh-sueldo-comision','kolrrhh-sueldo-desempeno-personal','kolrrhh-sueldo-rendimiento','kolrrhh-sueldo-no-rem']
       .forEach(id => setText(id, '$0'));
 
     __CURRENT_DESEMPENO_ROWS__ = [];
@@ -1291,7 +1291,7 @@ async function refreshBaseFromDB(){
     setText('kolrrhh-sueldo-base', '$0');
     refreshAntigFromState();
     refreshNoRemFromState();
-    refreshPresentismoDesempeno();
+    refreshDesempenoPersonalDesempeno();
     return;
   }
 
@@ -1310,7 +1310,7 @@ async function refreshBaseFromDB(){
     setText('kolrrhh-sueldo-base', '$0');
     refreshAntigFromState();
     refreshNoRemFromState();
-    refreshPresentismoDesempeno();
+    refreshDesempenoPersonalDesempeno();
     return;
   }
 
@@ -1323,14 +1323,14 @@ async function refreshBaseFromDB(){
     setText('kolrrhh-sueldo-base', (typeof moneyAR === 'function') ? moneyAR(base) : ('$' + base));
     refreshAntigFromState();
     refreshNoRemFromState();
-    refreshPresentismoDesempeno();
+    refreshDesempenoPersonalDesempeno();
   }catch(e){
     console.error(e);
     __CURRENT_BASE__ = 0;
     setText('kolrrhh-sueldo-base', '$0');
     refreshAntigFromState();
     refreshNoRemFromState();
-    refreshPresentismoDesempeno();
+    refreshDesempenoPersonalDesempeno();
   }
 }
 
@@ -1463,13 +1463,13 @@ async function fetchDesempenoRows(legajoNum){
   return json.data.rows;
 }
 
-async function refreshPresentismoDesempeno(){
+async function refreshDesempenoPersonalDesempeno(){
   const legajo = Number(getVal('kolrrhh-sueldo-legajo') || __CURRENT_LEGAJO__ || 0);
   const mesISO = getPeriodoMesISO();
 
   if (!legajo || !mesISO || !__CURRENT_BASE__) {
-    setText('kolrrhh-sueldo-presentismo', '$0');
-    setText('kolrrhh-sueldo-desempeno', '$0');
+    setText('kolrrhh-sueldo-desempeno-personal', '$0');
+    setText('kolrrhh-sueldo-rendimiento', '$0');
     return;
   }
 
@@ -1485,25 +1485,25 @@ async function refreshPresentismoDesempeno(){
     });
 
     if (!row) {
-      setText('kolrrhh-sueldo-presentismo', '$0');
-      setText('kolrrhh-sueldo-desempeno', '$0');
+      setText('kolrrhh-sueldo-desempeno-personal', '$0');
+      setText('kolrrhh-sueldo-rendimiento', '$0');
       return;
     }
 
     const inas = parseInasistencias(row.inasistencias);
-    const presentismo = (inas.length === 0)
+    const desempenoPersonal = (inas.length === 0)
       ? (__CURRENT_BASE__ * RENDIMIENTO_FACTOR)
       : 0;
 
     const desPct = Number(String(row.desempeno ?? '').replace(',', '.')) || 0;
     const desempeno = __CURRENT_BASE__ * (desPct / 100);
 
-    setText('kolrrhh-sueldo-presentismo', moneyAR(presentismo));
-    setText('kolrrhh-sueldo-desempeno', moneyAR(desempeno));
+    setText('kolrrhh-sueldo-desempeno-personal', moneyAR(desempenoPersonal));
+    setText('kolrrhh-sueldo-rendimiento', moneyAR(desempeno));
   }catch(e){
     console.error(e);
-    setText('kolrrhh-sueldo-presentismo', '$0');
-    setText('kolrrhh-sueldo-desempeno', '$0');
+    setText('kolrrhh-sueldo-desempeno-personal', '$0');
+    setText('kolrrhh-sueldo-rendimiento', '$0');
   }
 }
 
@@ -1526,7 +1526,7 @@ async function refreshPresentismoDesempeno(){
     ].forEach(id => setVal(id, ''));
 
     // reset labels calculados
-    ['kolrrhh-sueldo-base','kolrrhh-sueldo-antig','kolrrhh-sueldo-comision','kolrrhh-sueldo-presentismo','kolrrhh-sueldo-desempeno','kolrrhh-sueldo-no-rem']
+    ['kolrrhh-sueldo-base','kolrrhh-sueldo-antig','kolrrhh-sueldo-comision','kolrrhh-sueldo-desempeno-personal','kolrrhh-sueldo-rendimiento','kolrrhh-sueldo-no-rem']
       .forEach(id => setText(id, '$0'));
 
     clearSueldoError();
@@ -2214,7 +2214,7 @@ if (horasSel) horasSel.addEventListener('change', refreshBaseFromDB);
 const iniSel = qs('kolrrhh-sueldo-periodo-inicio');
 if (iniSel) iniSel.addEventListener('change', () => {
   refreshComisionFromDB();
-  refreshPresentismoDesempeno();
+  refreshDesempenoPersonalDesempeno();
 });
 
 const areaSel = qs('kolrrhh-sueldo-area');
@@ -2229,7 +2229,7 @@ const finSel = qs('kolrrhh-sueldo-periodo-fin');
 if (finSel) finSel.addEventListener('change', () => {
   refreshAntigFromState();
   refreshComisionFromDB();
-  refreshPresentismoDesempeno();
+  refreshDesempenoPersonalDesempeno();
 });
 
         saveBtn.disabled = true;

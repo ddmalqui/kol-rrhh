@@ -610,39 +610,39 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
         </div>
         <div class="kolrrhh-form-field kolrrhh-form-field--with-popover">
           <div class="kolrrhh-modal-label-row">
-            <label class="kolrrhh-modal-label">Presentismo</label>
+            <label class="kolrrhh-modal-label">Desem. Pers.</label>
             <button
               type="button"
               class="kolrrhh-info-btn"
-              aria-label="Más información sobre presentismo"
+              aria-label="Más información sobre desempenoPersonal"
               aria-expanded="false"
-              aria-controls="kolrrhh-presentismo-popover"
+              aria-controls="kolrrhh-desempeno-personal-popover"
             >
               i
             </button>
           </div>
-          <div id="kolrrhh-presentismo-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">
-            Presentismo = base × 1/12 (solo si no hay inasistencias).
+          <div id="kolrrhh-desempeno-personal-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">
+            Desempeno Personal = base × 1/12 (solo si no hay inasistencias).
           </div>
-          <div id="kolrrhh-sueldo-presentismo" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
+          <div id="kolrrhh-sueldo-desempeno-personal" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
         <div class="kolrrhh-form-field kolrrhh-form-field--with-popover">
           <div class="kolrrhh-modal-label-row">
-            <label class="kolrrhh-modal-label">Desempeño</label>
+            <label class="kolrrhh-modal-label">Rendimiento</label>
             <button
               type="button"
               class="kolrrhh-info-btn"
-              aria-label="Más información sobre desempeño"
+              aria-label="Más información sobre rendimiento"
               aria-expanded="false"
-              aria-controls="kolrrhh-desempeno-popover"
+              aria-controls="kolrrhh-rendimiento-popover"
             >
               i
             </button>
           </div>
-          <div id="kolrrhh-desempeno-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">
-            Desempeño = base × (porcentaje / 100).
+          <div id="kolrrhh-rendimiento-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">
+            Rendimiento Local = base × (porcentaje / 100).
           </div>
-          <div id="kolrrhh-sueldo-desempeno" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
+          <div id="kolrrhh-sueldo-rendimiento" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
         <div class="kolrrhh-form-field kolrrhh-form-field--with-popover">
           <div class="kolrrhh-modal-label-row">
