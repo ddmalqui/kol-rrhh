@@ -621,7 +621,9 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
               i
             </button>
           </div>
-          <div id="kolrrhh-presentismo-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">presentismo:</div>
+          <div id="kolrrhh-presentismo-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">
+            Presentismo = base × 1/12 (solo si no hay inasistencias).
+          </div>
           <div id="kolrrhh-sueldo-presentismo" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
         <div class="kolrrhh-form-field kolrrhh-form-field--with-popover">
@@ -637,7 +639,9 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
               i
             </button>
           </div>
-          <div id="kolrrhh-desempeno-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">desempeño:</div>
+          <div id="kolrrhh-desempeno-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">
+            Desempeño = base × (porcentaje / 100).
+          </div>
           <div id="kolrrhh-sueldo-desempeno" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
         <div class="kolrrhh-form-field kolrrhh-form-field--with-popover">
@@ -653,7 +657,9 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
               i
             </button>
           </div>
-          <div id="kolrrhh-no-rem-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">no remunerativo:</div>
+          <div id="kolrrhh-no-rem-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">
+            No remunerativo = base × 0,6.
+          </div>
           <div id="kolrrhh-sueldo-no-rem" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
       </div>
