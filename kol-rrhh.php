@@ -239,7 +239,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
             <!-- Placeholder de pestañas (como referencia) -->
             <div class="kolrrhh-tabs">
               <button type="button" class="kolrrhh-tab is-active" data-tab="t1">Items Sueldo</button>
-              <button type="button" class="kolrrhh-tab" data-tab="t2">Desempeno</button>
+              <button type="button" class="kolrrhh-tab" data-tab="t2">Rendimiento</button>
               <button type="button" class="kolrrhh-tab" data-tab="t3">Fichaje</button>
             </div>
             <div class="kolrrhh-tabpanes">
@@ -251,7 +251,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
               <div class="kolrrhh-tabpane" data-pane="t2">
                  <div id="kolrrhh-desempeno">
                     <div id="kolrrhh-desempeno-items" class="kolrrhh-muted">
-                        Seleccioná un empleado para ver su desempeño.
+                        Seleccioná un empleado para ver su rendimiento.
                     </div>
                   </div>
               </div>
@@ -628,11 +628,11 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
         </div>
         <div class="kolrrhh-form-field kolrrhh-form-field--with-popover">
           <div class="kolrrhh-modal-label-row">
-            <label class="kolrrhh-modal-label">Desempeño</label>
+            <label class="kolrrhh-modal-label">Rendimiento</label>
             <button
               type="button"
               class="kolrrhh-info-btn"
-              aria-label="Más información sobre desempeño"
+              aria-label="Más información sobre rendimiento"
               aria-expanded="false"
               aria-controls="kolrrhh-desempeno-popover"
             >
@@ -640,7 +640,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
             </button>
           </div>
           <div id="kolrrhh-desempeno-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">
-            Desempeño = base × (porcentaje / 100).
+            Desempeño del local = base × (porcentaje / 100).
           </div>
           <div id="kolrrhh-sueldo-desempeno" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
@@ -674,7 +674,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
 
 
     
-<!-- Modal agregar desempeño -->
+<!-- Modal agregar rendimiento -->
 <div id="kolrrhh-desempeno-modal" class="kolrrhh-modal" aria-hidden="true">
   <div class="kolrrhh-modal-backdrop" data-close="1"></div>
 
@@ -691,7 +691,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
           <select id="kolrrhh-desempeno-mes" class="kolrrhh-modal-input"></select>
         </div>
         <div class="kolrrhh-form-field">
-          <label class="kolrrhh-modal-label">Desempeño (%) *</label>
+          <label class="kolrrhh-modal-label">Rendimiento (%) *</label>
           <input id="kolrrhh-desempeno-porcentaje" type="number" step="0.01" min="0" max="100"
                  class="kolrrhh-modal-input" placeholder="Ej: 10" />
         </div>
@@ -716,7 +716,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
 
     <div class="kolrrhh-modal-actions">
       <button type="button" class="kolrrhh-btn" data-close="1">Cancelar</button>
-      <button type="button" class="kolrrhh-btn kolrrhh-btn-primary" id="kolrrhh-desempeno-save">Agregar desempeño</button>
+      <button type="button" class="kolrrhh-btn kolrrhh-btn-primary" id="kolrrhh-desempeno-save">Agregar rendimiento</button>
     </div>
   </div>
 </div>
@@ -888,7 +888,7 @@ public function ajax_get_desempeno_locales(){
   $useLocalJoin = ($colLocId !== '' && $colLocName !== '');
 
   if (!$colAnio || !$colMes || !$colLocalId || !$colControl || !$colObjetivos || !$colCompras || !$colTotal || !$colComision || (!$useLocalJoin && !$colLocalId)){
-    wp_send_json_error(['message' => 'No se pudieron detectar columnas necesarias en desempeño/locales.']);
+    wp_send_json_error(['message' => 'No se pudieron detectar columnas necesarias en rendimiento/locales.']);
   }
 
   $localNameExpr = $useLocalJoin ? "l.{$colLocName}" : "d.{$colLocalId}";
@@ -1148,7 +1148,7 @@ public function ajax_save_desempeno_item(){
 
   $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table));
   if ($exists !== $table) {
-    wp_send_json_error(['message' => 'La tabla de desempeño no existe']);
+    wp_send_json_error(['message' => 'La tabla de rendimiento no existe']);
   }
 
   // Si ya existe ese mes para ese legajo, lo actualizamos (evitamos duplicados)
@@ -1209,7 +1209,7 @@ public function ajax_delete_desempeno_item(){
 
   $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table));
   if ($exists !== $table) {
-    wp_send_json_error(['message' => 'La tabla de desempeño no existe']);
+    wp_send_json_error(['message' => 'La tabla de rendimiento no existe']);
   }
 
   $ok = $wpdb->delete($table, ['id' => $id], ['%d']);

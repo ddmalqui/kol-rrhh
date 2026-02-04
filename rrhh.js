@@ -595,7 +595,7 @@ fetch((window.KOL_RRHH && KOL_RRHH.ajaxurl) ? KOL_RRHH.ajaxurl : '/wp-admin/admi
 
 async function loadDesempenoForLegajo(legajoNum){
     const host = document.getElementById('kolrrhh-desempeno-items');
-    if (host) host.textContent = 'Cargando desempeño...';
+    if (host) host.textContent = 'Cargando rendimiento...';
 
     if (typeof KOL_RRHH === 'undefined' || !KOL_RRHH.ajaxurl) {
       if (host) host.textContent = 'Falta configuración AJAX (KOL_RRHH).';
@@ -616,7 +616,7 @@ async function loadDesempenoForLegajo(legajoNum){
 
       const json = await res.json();
       if (!json || !json.success) {
-        if (host) host.textContent = (json?.data?.message || 'Error al cargar desempeño');
+        if (host) host.textContent = (json?.data?.message || 'Error al cargar rendimiento');
         return;
       }
 
@@ -683,13 +683,13 @@ function renderDesempenoTable(rows){
         <div class="kolrrhh-sueldo-head-sub">Legajo: <strong>${legajoNum || '—'}</strong></div>
       </div>
       <div class="kolrrhh-sueldo-head-right">
-        <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary" id="kolrrhh-desempeno-add">+ Agregar desempeño</button>
+        <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary" id="kolrrhh-desempeno-add">+ Agregar rendimiento</button>
       </div>
     </div>
   `;
 
   if (!rows || rows.length === 0){
-    host.innerHTML = head + `<div class="kolrrhh-muted">Sin datos de desempeño para este legajo.</div>`;
+    host.innerHTML = head + `<div class="kolrrhh-muted">Sin datos de rendimiento para este legajo.</div>`;
     return;
   }
 
@@ -723,7 +723,7 @@ function renderDesempenoTable(rows){
         <thead>
           <tr>
             <th>Mes</th>
-            <th>Desempeño</th>
+            <th>Rendimiento</th>
             <th>Inasistencias</th>
             <th>Acciones</th>
           </tr>
@@ -874,7 +874,7 @@ document.addEventListener('click', function(ev){
     ev.preventDefault();
     const id = Number(del.getAttribute('data-id') || 0);
     if (!id) return;
-    if (!confirm('¿Eliminar este registro de desempeño?')) return;
+    if (!confirm('¿Eliminar este registro de rendimiento?')) return;
 
     const leg = Number(__CURRENT_LEGAJO__ || 0);
     if (!leg) return;
@@ -915,7 +915,7 @@ if (desempenoSaveBtn) {
 
     if (!legajo) { showDesempenoError('Falta legajo. Volvé a seleccionar el empleado.'); return; }
     if (!mes) { showDesempenoError('Seleccioná un mes.'); return; }
-    if (porcentajeRaw === '') { showDesempenoError('Completá el porcentaje de desempeño.'); return; }
+    if (porcentajeRaw === '') { showDesempenoError('Completá el porcentaje de rendimiento.'); return; }
 
     const pct = Number(String(porcentajeRaw).replace(',', '.'));
     if (Number.isNaN(pct) || pct < 0 || pct > 100) { showDesempenoError('El porcentaje debe estar entre 0 y 100.'); return; }
@@ -1806,7 +1806,7 @@ async function refreshPresentismoDesempeno(){
   });
 
   document.addEventListener('DOMContentLoaded', function () {
-    // === Tabs (Items Sueldo / Desempeño / Fichaje) ===
+    // === Tabs (Items Sueldo / Rendimiento / Fichaje) ===
     document.addEventListener('click', function(ev){
       const tab = ev.target.closest('.kolrrhh-tab');
       if (!tab) return;
