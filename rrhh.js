@@ -32,7 +32,7 @@ const NO_REMUNERATIVO_FACTOR = 0.6;
 
   function buildParticipacionOptions(){
     const opts = [];
-    for (let v = 0; v <= 10.0001; v += 0.5) {
+    for (let v = 0; v <= 1.0001; v += 0.5) {
       const value = v.toFixed(1);
       const label = value.replace('.', ',');
       opts.push(`<option value="${value}">${label}</option>`);
@@ -43,7 +43,7 @@ const NO_REMUNERATIVO_FACTOR = 0.6;
   function normalizeParticipacion(v){
     const n = parseFloat(String(v ?? '0').replace(',', '.'));
     if (isNaN(n)) return '0.0';
-    const clamped = Math.max(0, Math.min(10, n));
+    const clamped = Math.max(0, Math.min(1, n));
     return clamped.toFixed(1);
   }
 
@@ -84,7 +84,8 @@ const NO_REMUNERATIVO_FACTOR = 0.6;
   function getParticipacionValue(){
     const partRaw = getVal('kolrrhh-sueldo-participacion') || '0';
     const participacion = parseFloat(partRaw.replace(',', '.')) || 0;
-    return Math.max(0, isFinite(participacion) ? participacion : 0);
+    if (!isFinite(participacion)) return 0;
+    return Math.max(0, Math.min(1, participacion));
   }
 
   function renderComisionFromState(){
