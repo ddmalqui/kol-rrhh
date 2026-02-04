@@ -640,7 +640,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
             </button>
           </div>
           <div id="kolrrhh-rendimiento-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">
-            Rendimiento Local = base × comisión coef del mes/año/local.
+            Rendimiento = Rendimiento del local × participación × $300.000.
           </div>
           <div id="kolrrhh-sueldo-rendimiento" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>

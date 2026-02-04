@@ -28,7 +28,6 @@ const KOL_RRHH_ROLES = [
   'Recursos Humanos','Entrenamiento','Responsable compras',
   'Responsable pedidos','Responsable stock'
 ];
-const RENDIMIENTO_FACTOR = 1 / 12;
 const NO_REMUNERATIVO_FACTOR = 0.6;
 
   function buildParticipacionOptions(){
@@ -1125,6 +1124,7 @@ if (partSel) {
 
    partSel.addEventListener('change', () => {
   renderComisionFromState();
+  refreshDesempenoPersonalDesempeno();
 });
 
 }
@@ -1478,15 +1478,15 @@ async function refreshDesempenoPersonalDesempeno(){
   const legajo = Number(getVal('kolrrhh-sueldo-legajo') || __CURRENT_LEGAJO__ || 0);
   const mesISO = getPeriodoMesISO();
 
-  if (!__CURRENT_BASE__) {
-    setText('kolrrhh-sueldo-desempeno-personal', '$0');
-    setText('kolrrhh-sueldo-rendimiento', '$0');
-    return;
-  }
-
   try{
-    const rendimiento = __CURRENT_BASE__ * (Number(__CURRENT_RENDIMIENTO_COEF__ || 0));
+    const participacion = getParticipacionValue();
+    const rendimiento = (Number(__CURRENT_RENDIMIENTO_COEF__ || 0)) * participacion * 300000;
     setText('kolrrhh-sueldo-rendimiento', moneyAR(rendimiento));
+
+    if (!__CURRENT_BASE__) {
+      setText('kolrrhh-sueldo-desempeno-personal', '$0');
+      return;
+    }
 
     if (!legajo || !mesISO) {
       setText('kolrrhh-sueldo-desempeno-personal', '$0');
@@ -1515,7 +1515,7 @@ async function refreshDesempenoPersonalDesempeno(){
   }catch(e){
     console.error(e);
     setText('kolrrhh-sueldo-desempeno-personal', '$0');
-    setText('kolrrhh-sueldo-rendimiento', moneyAR(__CURRENT_BASE__ * (Number(__CURRENT_RENDIMIENTO_COEF__ || 0))));
+    setText('kolrrhh-sueldo-rendimiento', moneyAR((Number(__CURRENT_RENDIMIENTO_COEF__ || 0)) * getParticipacionValue() * 300000));
   }
 }
 
