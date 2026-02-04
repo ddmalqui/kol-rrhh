@@ -622,7 +622,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
             </button>
           </div>
           <div id="kolrrhh-desempeno-personal-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">
-            Desempeno Personal = base × 1/12 (solo si no hay inasistencias).
+            Desempeno Personal = base × desempeno personal.
           </div>
           <div id="kolrrhh-sueldo-desempeno-personal" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
@@ -640,7 +640,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
             </button>
           </div>
           <div id="kolrrhh-rendimiento-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">
-            Rendimiento Local = base × (porcentaje / 100).
+            Rendimiento = Rendimiento del local × participación × $300.000.
           </div>
           <div id="kolrrhh-sueldo-rendimiento" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
