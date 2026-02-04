@@ -1283,6 +1283,15 @@ function refreshNoRemFromState(){
   );
 }
 
+function refreshAllSueldoCalculations(){
+  renderComisionFromState();
+  refreshAntigFromState();
+  refreshNoRemFromState();
+  refreshBaseFromDB();
+  refreshComisionFromDB();
+  refreshDesempenoPersonalDesempeno();
+}
+
 async function refreshBaseFromDB(){
   const rol = getVal('kolrrhh-sueldo-rol');
   const horas = getVal('kolrrhh-sueldo-horas');
@@ -2098,6 +2107,22 @@ async function refreshDesempenoPersonalDesempeno(){
         if (nombreEl.value.length > 100) nombreEl.value = nombreEl.value.slice(0, 100);
       });
     }
+
+    function shouldRefreshSueldoFromEvent(target){
+      if (!target || !(target instanceof Element)) return false;
+      if (!target.matches('input, select, textarea')) return false;
+      const modal = target.closest('#kolrrhh-sueldo-modal');
+      if (!modal || !modal.classList.contains('is-open')) return false;
+      return true;
+    }
+
+    function handleSueldoRefreshEvent(ev){
+      if (!shouldRefreshSueldoFromEvent(ev.target)) return;
+      refreshAllSueldoCalculations();
+    }
+
+    document.addEventListener('input', handleSueldoRefreshEvent);
+    document.addEventListener('change', handleSueldoRefreshEvent);
 
     // Obra Social y Dirección max 100
     const osEl = qs('kolrrhh-modal-obra_social');
