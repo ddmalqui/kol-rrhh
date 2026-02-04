@@ -1304,7 +1304,7 @@ if (!$rol || !$area) {
   }
 
   $rol      = isset($_POST['rol']) ? sanitize_text_field($_POST['rol']) : '';
-  // Participación: decimal 0.0 a 1.0 (paso 0.5 en la UI)
+  // Participación: decimal 0.00 a 1.00 (paso 0.05 en la UI)
   $participacion = isset($_POST['participacion']) ? floatval(str_replace(',', '.', sanitize_text_field($_POST['participacion']))) : 0;
   if ($participacion < 0) $participacion = 0;
   if ($participacion > 1) $participacion = 1;

@@ -32,19 +32,19 @@ const NO_REMUNERATIVO_FACTOR = 0.6;
 
   function buildParticipacionOptions(){
     const opts = [];
-    for (let v = 0; v <= 1.0001; v += 0.5) {
-      const value = v.toFixed(1);
+    for (let v = 0; v <= 1.00001; v += 0.05) {
+      const value = v.toFixed(2);
       const label = value.replace('.', ',');
       opts.push(`<option value="${value}">${label}</option>`);
     }
-    return `<option value="0.0">0,0</option>` + opts.slice(1).join('');
+    return `<option value="0.00">0,00</option>` + opts.slice(1).join('');
   }
 
   function normalizeParticipacion(v){
     const n = parseFloat(String(v ?? '0').replace(',', '.'));
-    if (isNaN(n)) return '0.0';
+    if (isNaN(n)) return '0.00';
     const clamped = Math.max(0, Math.min(1, n));
-    return clamped.toFixed(1);
+    return clamped.toFixed(2);
   }
 
   function formatParticipacionAR(v){
