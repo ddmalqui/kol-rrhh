@@ -200,6 +200,17 @@
   background: rgba(0,0,0,.03);
 }
 
+.kolrrhh-locales-actions{
+  width: 46px;
+  text-align: right;
+}
+
+.kolrrhh-locales-edit{
+  width: 30px;
+  height: 30px;
+  font-size: 13px;
+}
+
 /* ===== RIGHT card (sticky) ===== */
 .kolrrhh-card{
   position: sticky;

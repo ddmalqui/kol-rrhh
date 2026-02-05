@@ -20,6 +20,7 @@ final class KOL_RRHH_Plugin {
     add_action('wp_ajax_kol_rrhh_save_sueldo_item', [$this,'ajax_save_sueldo_item']);
     add_action('wp_ajax_kol_rrhh_get_desempeno_items', [$this,'ajax_get_desempeno_items']);
     add_action('wp_ajax_kol_rrhh_get_desempeno_locales', [$this,'ajax_get_desempeno_locales']);
+    add_action('wp_ajax_kol_rrhh_save_desempeno_locales', [$this,'ajax_save_desempeno_locales']);
     add_action('wp_ajax_kol_rrhh_save_desempeno_item', [$this,'ajax_save_desempeno_item']);
     add_action('wp_ajax_kol_rrhh_delete_desempeno_item', [$this,'ajax_delete_desempeno_item']);
     add_action('wp_ajax_kol_rrhh_get_fichaje_html', [$this,'ajax_get_fichaje_html']);
@@ -728,6 +729,64 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
 </div>
 
 
+<!-- Modal editar rendimiento locales -->
+<div id="kolrrhh-locales-modal" class="kolrrhh-modal" aria-hidden="true">
+  <div class="kolrrhh-modal-backdrop" data-close="1"></div>
+
+  <div class="kolrrhh-modal-card kolrrhh-modal-card-wide" role="dialog" aria-modal="true" aria-labelledby="kolrrhh-locales-title">
+    <div class="kolrrhh-modal-body">
+      <div id="kolrrhh-locales-error" class="kolrrhh-form-error" style="display:none;"></div>
+
+      <input type="hidden" id="kolrrhh-locales-anio" value="" />
+      <input type="hidden" id="kolrrhh-locales-mes" value="" />
+      <input type="hidden" id="kolrrhh-locales-local-id" value="" />
+
+      <div class="kolrrhh-form-row" style="--cols:2;">
+        <div class="kolrrhh-form-field">
+          <label class="kolrrhh-modal-label">Local</label>
+          <div id="kolrrhh-locales-title" class="kolrrhh-modal-input kolrrhh-modal-value">—</div>
+        </div>
+        <div class="kolrrhh-form-field">
+          <label class="kolrrhh-modal-label">Período</label>
+          <div id="kolrrhh-locales-periodo" class="kolrrhh-modal-input kolrrhh-modal-value">—</div>
+        </div>
+      </div>
+
+      <div class="kolrrhh-form-row" style="--cols:4;">
+        <div class="kolrrhh-form-field">
+          <label class="kolrrhh-modal-label">Control caja (%)</label>
+          <input id="kolrrhh-locales-control" type="number" step="0.01" min="0" class="kolrrhh-modal-input" placeholder="Ej: 10" />
+        </div>
+        <div class="kolrrhh-form-field">
+          <label class="kolrrhh-modal-label">Objetivos (%)</label>
+          <input id="kolrrhh-locales-objetivos" type="number" step="0.01" min="0" class="kolrrhh-modal-input" placeholder="Ej: 10" />
+        </div>
+        <div class="kolrrhh-form-field">
+          <label class="kolrrhh-modal-label">Compras (%)</label>
+          <input id="kolrrhh-locales-compras" type="number" step="0.01" min="0" class="kolrrhh-modal-input" placeholder="Ej: 10" />
+        </div>
+        <div class="kolrrhh-form-field">
+          <label class="kolrrhh-modal-label">Total (%)</label>
+          <input id="kolrrhh-locales-total" type="number" step="0.01" min="0" class="kolrrhh-modal-input" readonly style="background: rgba(0,0,0,.03);" />
+        </div>
+      </div>
+
+      <div class="kolrrhh-form-row" style="--cols:2;">
+        <div class="kolrrhh-form-field">
+          <label class="kolrrhh-modal-label">Comisión coef</label>
+          <input id="kolrrhh-locales-comision" type="number" step="0.0001" min="0" class="kolrrhh-modal-input" placeholder="Ej: 0.02" />
+        </div>
+      </div>
+    </div>
+
+    <div class="kolrrhh-modal-actions">
+      <button type="button" class="kolrrhh-btn" data-close="1">Cancelar</button>
+      <button type="button" class="kolrrhh-btn kolrrhh-btn-primary" id="kolrrhh-locales-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+
 <?php
     return ob_get_clean();
   }
@@ -903,6 +962,7 @@ public function ajax_get_desempeno_locales(){
     SELECT
       d.{$colAnio} AS anio,
       d.{$colMes} AS mes,
+      d.{$colLocalId} AS local_id,
       {$localNameExpr} AS local_nombre,
       d.{$colControl} AS control_caja_pct,
       d.{$colObjetivos} AS objetivos_pct,
@@ -916,6 +976,123 @@ public function ajax_get_desempeno_locales(){
 
   $rows = $wpdb->get_results($sql, ARRAY_A) ?: [];
   wp_send_json_success(['rows' => $rows]);
+}
+
+public function ajax_save_desempeno_locales(){
+  check_ajax_referer('kol_rrhh_nonce', 'nonce');
+  if (!is_user_logged_in()) {
+    wp_send_json_error(['message' => 'No autorizado']);
+  }
+
+  $anio = isset($_POST['anio']) ? intval($_POST['anio']) : 0;
+  $mes = isset($_POST['mes']) ? intval($_POST['mes']) : 0;
+  $local_id = isset($_POST['local_id']) ? intval($_POST['local_id']) : 0;
+  $control = isset($_POST['control_caja_pct']) ? floatval(str_replace(',', '.', $_POST['control_caja_pct'])) : 0;
+  $objetivos = isset($_POST['objetivos_pct']) ? floatval(str_replace(',', '.', $_POST['objetivos_pct'])) : 0;
+  $compras = isset($_POST['compras_pct']) ? floatval(str_replace(',', '.', $_POST['compras_pct'])) : 0;
+  $total = isset($_POST['total_pct']) && $_POST['total_pct'] !== '' ? floatval(str_replace(',', '.', $_POST['total_pct'])) : ($control + $objetivos + $compras);
+  $comision = isset($_POST['comision_coef']) ? floatval(str_replace(',', '.', $_POST['comision_coef'])) : 0;
+
+  if ($anio <= 0 || $mes <= 0 || $mes > 12 || $local_id <= 0) {
+    wp_send_json_error(['message' => 'Datos inválidos']);
+  }
+
+  global $wpdb;
+  $t_desempeno = $wpdb->prefix . 'kol_rrhh_desempeno_locales';
+  $t_alt_desempeno = $wpdb->prefix . 'kol_rrhh_rendimiento_locales';
+
+  $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $t_desempeno));
+  if ($exists !== $t_desempeno) {
+    $exists_alt = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $t_alt_desempeno));
+    if ($exists_alt !== $t_alt_desempeno) {
+      wp_send_json_error(['message' => 'No existe la tabla de rendimiento locales.']);
+    }
+    $t_desempeno = $t_alt_desempeno;
+  }
+
+  $cols_d = $wpdb->get_col("SHOW COLUMNS FROM {$t_desempeno}", 0) ?: [];
+  $colAnio = in_array('anio', $cols_d, true) ? 'anio' : (in_array('año', $cols_d, true) ? 'año' : '');
+  $colMes = in_array('mes', $cols_d, true) ? 'mes' : '';
+  $colLocalId = '';
+  foreach (['local_id','id_local','locales_id','id_locales','local'] as $c){
+    if (in_array($c, $cols_d, true)) { $colLocalId = $c; break; }
+  }
+  $colControl = '';
+  foreach (['control_caja_pct','control_caja','control_pct'] as $c){
+    if (in_array($c, $cols_d, true)) { $colControl = $c; break; }
+  }
+  $colObjetivos = '';
+  foreach (['objetivos_pct','objetivo_pct','objetivos'] as $c){
+    if (in_array($c, $cols_d, true)) { $colObjetivos = $c; break; }
+  }
+  $colCompras = '';
+  foreach (['compras_pct','compra_pct','compras'] as $c){
+    if (in_array($c, $cols_d, true)) { $colCompras = $c; break; }
+  }
+  $colTotal = '';
+  foreach (['total_pct','total'] as $c){
+    if (in_array($c, $cols_d, true)) { $colTotal = $c; break; }
+  }
+  $colComision = '';
+  foreach (['comision_coef','comision','coeficiente_comision'] as $c){
+    if (in_array($c, $cols_d, true)) { $colComision = $c; break; }
+  }
+
+  if (!$colAnio || !$colMes || !$colLocalId || !$colControl || !$colObjetivos || !$colCompras || !$colTotal || !$colComision) {
+    wp_send_json_error(['message' => 'No se pudieron detectar columnas necesarias en rendimiento_locales.']);
+  }
+
+  $exists_row = $wpdb->get_var($wpdb->prepare(
+    "SELECT COUNT(*) FROM {$t_desempeno} WHERE {$colAnio}=%d AND {$colMes}=%d AND {$colLocalId}=%d",
+    $anio,
+    $mes,
+    $local_id
+  ));
+
+  $data = [
+    $colControl => $control,
+    $colObjetivos => $objetivos,
+    $colCompras => $compras,
+    $colTotal => $total,
+    $colComision => $comision,
+  ];
+
+  $formats = ['%f','%f','%f','%f','%f'];
+
+  if ($exists_row) {
+    $ok = $wpdb->update(
+      $t_desempeno,
+      $data,
+      [
+        $colAnio => $anio,
+        $colMes => $mes,
+        $colLocalId => $local_id,
+      ],
+      $formats,
+      ['%d','%d','%d']
+    );
+    if ($ok === false) {
+      wp_send_json_error(['message' => 'No se pudo actualizar']);
+    }
+    wp_send_json_success(['updated' => 1]);
+  }
+
+  $data_insert = array_merge(
+    [
+      $colAnio => $anio,
+      $colMes => $mes,
+      $colLocalId => $local_id,
+    ],
+    $data
+  );
+  $formats_insert = array_merge(['%d','%d','%d'], $formats);
+
+  $ok = $wpdb->insert($t_desempeno, $data_insert, $formats_insert);
+  if (!$ok) {
+    wp_send_json_error(['message' => 'No se pudo insertar']);
+  }
+
+  wp_send_json_success(['created' => 1, 'id' => intval($wpdb->insert_id)]);
 }
 
 public function ajax_get_base(){
