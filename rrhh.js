@@ -2006,7 +2006,6 @@ async function refreshDesempenoPersonalDesempeno(){
                 <table class="kolrrhh-table kolrrhh-locales-table">
                   <thead>
                     <tr>
-                      <th>Textos completos</th>
                       <th>Nombre local</th>
                       <th>Control caja %</th>
                       <th>Objetivos %</th>
@@ -2018,7 +2017,6 @@ async function refreshDesempenoPersonalDesempeno(){
                   <tbody>
                     ${group.rows.map(r => `
                       <tr>
-                        <td class="kolrrhh-locales-name-cell">${escapeHtml(String(r.textos_completos ?? '—'))}</td>
                         <td>${escapeHtml(String(r.local_nombre ?? '—'))}</td>
                         <td>${escapeHtml(String(r.control_caja_pct ?? '—'))}</td>
                         <td>${escapeHtml(String(r.objetivos_pct ?? '—'))}</td>
