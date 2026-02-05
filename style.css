@@ -802,7 +802,36 @@
   opacity:.85;
 }
 
-.kolrrhh-sueldo-actions{ margin-left:auto; }
+.kolrrhh-sueldo-modal-actions{
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.kolrrhh-sueldo-total{
+  display:flex;
+  flex-direction:column;
+  gap: 4px;
+}
+
+.kolrrhh-sueldo-total-label{
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  opacity:.65;
+}
+
+.kolrrhh-sueldo-total-value{
+  font-size:16px;
+  font-weight:900;
+}
+
+.kolrrhh-sueldo-actions{
+  margin-left:auto;
+  display:flex;
+  gap:12px;
+}
 
 /* tabla detalles: un toque más compacta */
 .kolrrhh-sueldo-table-details th,

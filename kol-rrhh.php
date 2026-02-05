@@ -665,9 +665,15 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
       </div>
     </div>
 
-    <div class="kolrrhh-modal-actions">
-      <button type="button" class="kolrrhh-btn" data-close="1">Cancelar</button>
-      <button type="button" class="kolrrhh-btn kolrrhh-btn-primary" id="kolrrhh-sueldo-save">Guardar</button>
+    <div class="kolrrhh-modal-actions kolrrhh-sueldo-modal-actions">
+      <div class="kolrrhh-sueldo-total">
+        <span class="kolrrhh-sueldo-total-label">Total a cobrar</span>
+        <span id="kolrrhh-sueldo-total-cobrar" class="kolrrhh-sueldo-total-value">$0,00</span>
+      </div>
+      <div class="kolrrhh-sueldo-actions">
+        <button type="button" class="kolrrhh-btn" data-close="1">Cancelar</button>
+        <button type="button" class="kolrrhh-btn kolrrhh-btn-primary" id="kolrrhh-sueldo-save">Guardar</button>
+      </div>
     </div>
   </div>
 </div>
