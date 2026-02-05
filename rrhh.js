@@ -1836,9 +1836,9 @@ async function refreshDesempenoPersonalDesempeno(){
   // ========== EVENTS ==========
 
   document.addEventListener('click', function (e) {
-    // Edit icon
+    // Edit icon (empleados)
     const edit = e.target.closest('.kolrrhh-edit-icon');
-    if (edit) {
+    if (edit && !edit.classList.contains('kolrrhh-locales-edit')) {
       e.preventDefault();
       e.stopPropagation();
 
