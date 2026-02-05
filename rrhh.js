@@ -58,6 +58,9 @@ const NO_REMUNERATIVO_FACTOR = 0.6;
     const el = qs(id);
     if (!el) return;
     el.textContent = (v === null || v === undefined) ? '' : String(v);
+    if (typeof calcularEfectivoAutomatico === 'function') {
+      calcularEfectivoAutomatico();
+    }
   }
 
   function setVal(id, v){
@@ -2492,9 +2495,15 @@ if (finSel) finSel.addEventListener('change', () => {
 // 1. Esta función limpia los puntos y comas para que se puedan sumar
 function limpiarMontoKOL(id) {
   const el = document.getElementById(id);
-  if (!el || !el.value) return 0;
+  if (!el) return 0;
 
-  let v = String(el.value);
+  const rawValue = (el.value !== undefined && el.value !== null && el.value !== '')
+    ? el.value
+    : el.textContent;
+
+  if (!rawValue) return 0;
+
+  let v = String(rawValue);
 
   // sacar $ y espacios
   v = v.replace(/\$/g, '').replace(/\s/g, '');
@@ -2518,6 +2527,12 @@ function calcularEfectivoAutomatico() {
     const feriados    = limpiarMontoKOL('kolrrhh-sueldo-feriados');
     const liquidacion = limpiarMontoKOL('kolrrhh-sueldo-liquidacion');
     const vacNoTom    = limpiarMontoKOL('kolrrhh-sueldo-vac-no-tomadas');
+    const base        = limpiarMontoKOL('kolrrhh-sueldo-base');
+    const antig       = limpiarMontoKOL('kolrrhh-sueldo-antig');
+    const comision    = limpiarMontoKOL('kolrrhh-sueldo-comision');
+    const desempeno   = limpiarMontoKOL('kolrrhh-sueldo-desempeno-personal');
+    const rendimiento = limpiarMontoKOL('kolrrhh-sueldo-rendimiento');
+    const noRem       = limpiarMontoKOL('kolrrhh-sueldo-no-rem');
 
     // Restas (Deducciones / Otros pagos)
     const descuentos  = limpiarMontoKOL('kolrrhh-sueldo-descuentos');
@@ -2525,7 +2540,20 @@ function calcularEfectivoAutomatico() {
     const creditos    = limpiarMontoKOL('kolrrhh-sueldo-creditos');
 
     // FÓRMULA SOLICITADA
-    const total = (jornada + bono + vacTomadas + feriados + liquidacion + vacNoTom) - (descuentos + trans + creditos);
+    const total = (
+        jornada +
+        bono +
+        vacTomadas +
+        feriados +
+        liquidacion +
+        vacNoTom +
+        base +
+        antig +
+        comision +
+        desempeno +
+        rendimiento +
+        noRem
+      ) - (descuentos + trans + creditos);
 
     const campoEfectivo = document.getElementById('kolrrhh-sueldo-efectivo');
     if (campoEfectivo) {
