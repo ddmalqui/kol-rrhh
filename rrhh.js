@@ -162,6 +162,99 @@ const NO_REMUNERATIVO_FACTOR = 0.6;
     box.style.display = 'none';
   }
 
+  function parseLocalesNumber(value){
+    const n = parseFloat(String(value ?? '0').replace(',', '.'));
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function parseMesNumber(value){
+    const raw = String(value ?? '').trim();
+    if (!raw) return 0;
+    const iso = raw.match(/^(\d{4})-(\d{2})/);
+    if (iso) return parseInt(iso[2], 10) || 0;
+    const compact = raw.match(/^(\d{2})\/(\d{4})$/);
+    if (compact) return parseInt(compact[1], 10) || 0;
+    const n = parseInt(raw, 10);
+    return Number.isNaN(n) ? 0 : n;
+  }
+
+  function setLocalesError(msg){
+    const box = qs('kolrrhh-locales-error');
+    if (!box) return;
+    box.textContent = msg || 'Revisá los datos.';
+    box.style.display = 'block';
+  }
+
+  function clearLocalesError(){
+    const box = qs('kolrrhh-locales-error');
+    if (!box) return;
+    box.textContent = '';
+    box.style.display = 'none';
+  }
+
+  function renderLocalesTotal(){
+    const control = parseLocalesNumber(getVal('kolrrhh-locales-control'));
+    const objetivos = parseLocalesNumber(getVal('kolrrhh-locales-objetivos'));
+    const compras = parseLocalesNumber(getVal('kolrrhh-locales-compras'));
+    const total = control + objetivos + compras;
+    setVal('kolrrhh-locales-total', total ? total.toFixed(2) : '0');
+  }
+
+  function openLocalesModalFromButton(btn){
+    if (!btn) return;
+    clearLocalesError();
+    const anio = btn.dataset.anio || '';
+    const mesRaw = btn.dataset.mes || '';
+    const mes = parseMesNumber(mesRaw);
+    setVal('kolrrhh-locales-anio', anio);
+    setVal('kolrrhh-locales-mes', String(mes || ''));
+    setVal('kolrrhh-locales-local-id', btn.dataset.localId || '');
+    setText('kolrrhh-locales-title', btn.dataset.localName || '—');
+    const period = anio && mes ? `${anio}/${String(mes).padStart(2, '0')}` : '—';
+    setText('kolrrhh-locales-periodo', period);
+    setVal('kolrrhh-locales-control', btn.dataset.control || '');
+    setVal('kolrrhh-locales-objetivos', btn.dataset.objetivos || '');
+    setVal('kolrrhh-locales-compras', btn.dataset.compras || '');
+    setVal('kolrrhh-locales-comision', btn.dataset.comision || '');
+    renderLocalesTotal();
+
+    const modal = qs('kolrrhh-locales-modal');
+    if (!modal) return;
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeLocalesModal(){
+    const modal = qs('kolrrhh-locales-modal');
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+
+  async function loadRendimientoLocales(){
+    const body = document.querySelector('.kolrrhh-locales-body');
+    if (!body) return;
+
+    const fd = new FormData();
+    fd.append('action', 'kol_rrhh_get_desempeno_locales');
+    fd.append('nonce', AJAX_NONCE);
+
+    try {
+      const res = await fetch(AJAX_URL, { method: 'POST', body: fd, credentials: 'same-origin' });
+      const data = await res.json();
+      if (!data || !data.success) {
+        const msg = data?.data?.message || 'No se pudo cargar el rendimiento.';
+        body.innerHTML = `<div class="kolrrhh-muted" style="padding:14px;">${escapeHtml(msg)}</div>`;
+        return;
+      }
+      const rows = data.data?.rows || [];
+      __CURRENT_RENDIMIENTO_LOCALES_ROWS__ = Array.isArray(rows) ? rows : [];
+      body.innerHTML = buildRendimientoTable(__CURRENT_RENDIMIENTO_LOCALES_ROWS__);
+    } catch (err) {
+      body.innerHTML = `<div class="kolrrhh-muted" style="padding:14px;">Error al cargar el rendimiento.</div>`;
+    }
+  }
+
   function safeJsonParse(str) {
     try { return JSON.parse(str); } catch (e) { return null; }
   }
@@ -2107,99 +2200,6 @@ async function refreshDesempenoPersonalDesempeno(){
           `).join('')}
         </div>
       `;
-    }
-
-    function parseLocalesNumber(value){
-      const n = parseFloat(String(value ?? '0').replace(',', '.'));
-      return Number.isFinite(n) ? n : 0;
-    }
-
-    function parseMesNumber(value){
-      const raw = String(value ?? '').trim();
-      if (!raw) return 0;
-      const iso = raw.match(/^(\d{4})-(\d{2})/);
-      if (iso) return parseInt(iso[2], 10) || 0;
-      const compact = raw.match(/^(\d{2})\/(\d{4})$/);
-      if (compact) return parseInt(compact[1], 10) || 0;
-      const n = parseInt(raw, 10);
-      return Number.isNaN(n) ? 0 : n;
-    }
-
-    function setLocalesError(msg){
-      const box = qs('kolrrhh-locales-error');
-      if (!box) return;
-      box.textContent = msg || 'Revisá los datos.';
-      box.style.display = 'block';
-    }
-
-    function clearLocalesError(){
-      const box = qs('kolrrhh-locales-error');
-      if (!box) return;
-      box.textContent = '';
-      box.style.display = 'none';
-    }
-
-    function renderLocalesTotal(){
-      const control = parseLocalesNumber(getVal('kolrrhh-locales-control'));
-      const objetivos = parseLocalesNumber(getVal('kolrrhh-locales-objetivos'));
-      const compras = parseLocalesNumber(getVal('kolrrhh-locales-compras'));
-      const total = control + objetivos + compras;
-      setVal('kolrrhh-locales-total', total ? total.toFixed(2) : '0');
-    }
-
-    function openLocalesModalFromButton(btn){
-      if (!btn) return;
-      clearLocalesError();
-      const anio = btn.dataset.anio || '';
-      const mesRaw = btn.dataset.mes || '';
-      const mes = parseMesNumber(mesRaw);
-      setVal('kolrrhh-locales-anio', anio);
-      setVal('kolrrhh-locales-mes', String(mes || ''));
-      setVal('kolrrhh-locales-local-id', btn.dataset.localId || '');
-      setText('kolrrhh-locales-title', btn.dataset.localName || '—');
-      const period = anio && mes ? `${anio}/${String(mes).padStart(2, '0')}` : '—';
-      setText('kolrrhh-locales-periodo', period);
-      setVal('kolrrhh-locales-control', btn.dataset.control || '');
-      setVal('kolrrhh-locales-objetivos', btn.dataset.objetivos || '');
-      setVal('kolrrhh-locales-compras', btn.dataset.compras || '');
-      setVal('kolrrhh-locales-comision', btn.dataset.comision || '');
-      renderLocalesTotal();
-
-      const modal = qs('kolrrhh-locales-modal');
-      if (!modal) return;
-      modal.classList.add('is-open');
-      modal.setAttribute('aria-hidden', 'false');
-    }
-
-    function closeLocalesModal(){
-      const modal = qs('kolrrhh-locales-modal');
-      if (!modal) return;
-      modal.classList.remove('is-open');
-      modal.setAttribute('aria-hidden', 'true');
-    }
-
-    async function loadRendimientoLocales(){
-      const body = document.querySelector('.kolrrhh-locales-body');
-      if (!body) return;
-
-      const fd = new FormData();
-      fd.append('action', 'kol_rrhh_get_desempeno_locales');
-      fd.append('nonce', AJAX_NONCE);
-
-      try {
-        const res = await fetch(AJAX_URL, { method: 'POST', body: fd, credentials: 'same-origin' });
-        const data = await res.json();
-        if (!data || !data.success) {
-          const msg = data?.data?.message || 'No se pudo cargar el rendimiento.';
-          body.innerHTML = `<div class="kolrrhh-muted" style="padding:14px;">${escapeHtml(msg)}</div>`;
-          return;
-        }
-        const rows = data.data?.rows || [];
-        __CURRENT_RENDIMIENTO_LOCALES_ROWS__ = Array.isArray(rows) ? rows : [];
-        body.innerHTML = buildRendimientoTable(__CURRENT_RENDIMIENTO_LOCALES_ROWS__);
-      } catch (err) {
-        body.innerHTML = `<div class="kolrrhh-muted" style="padding:14px;">Error al cargar el rendimiento.</div>`;
-      }
     }
 
     if (localesBtn) {
