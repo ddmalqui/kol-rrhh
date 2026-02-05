@@ -1158,6 +1158,8 @@ if (partSel) {
         calcularEfectivoAutomatico();
       });
 
+    actualizarTotalCobrar();
+
     // reset labels calculados (UI)
     ['kolrrhh-sueldo-base','kolrrhh-sueldo-antig','kolrrhh-sueldo-comision','kolrrhh-sueldo-desempeno-personal','kolrrhh-sueldo-rendimiento','kolrrhh-sueldo-no-rem']
       .forEach(id => setText(id, '$0'));
@@ -2563,6 +2565,22 @@ function calcularEfectivoAutomatico() {
             maximumFractionDigits: 2 
         });
     }
+
+    actualizarTotalCobrar();
+}
+
+function actualizarTotalCobrar() {
+  const efectivo = limpiarMontoKOL('kolrrhh-sueldo-efectivo');
+  const transferencia = limpiarMontoKOL('kolrrhh-sueldo-transferencia');
+  const creditos = limpiarMontoKOL('kolrrhh-sueldo-creditos');
+  const total = efectivo + transferencia + creditos;
+  const totalEl = document.getElementById('kolrrhh-sueldo-total-cobrar');
+  if (totalEl) {
+    totalEl.textContent = `$${total.toLocaleString('es-AR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })}`;
+  }
 }
 
 // 3. Escuchamos los cambios en todos los campos involucrados
