@@ -18,6 +18,7 @@
   let __CURRENT_VINCULO_ANTIG__ = '';
   let __CURRENT_BASE__ = 0;
   let __CURRENT_DESEMPENO_ROWS__ = [];
+  let __CURRENT_RENDIMIENTO_LOCALES_ROWS__ = [];
 
 let __CURRENT_COMISION__ = 0;
 let __CURRENT_COMISION_BASE__ = 0;
@@ -950,6 +951,60 @@ if (desempenoSaveBtn) {
     }catch(err){
       console.error(err);
       showDesempenoError('Error de red/servidor al guardar.');
+    }
+  });
+}
+
+// Guardar rendimiento locales (AJAX)
+const localesSaveBtn = document.getElementById('kolrrhh-locales-save');
+if (localesSaveBtn) {
+  localesSaveBtn.addEventListener('click', async function(ev){
+    ev.preventDefault();
+    clearLocalesError();
+
+    const anio = Number(getVal('kolrrhh-locales-anio'));
+    const mes = Number(getVal('kolrrhh-locales-mes'));
+    const localId = Number(getVal('kolrrhh-locales-local-id'));
+    const control = getVal('kolrrhh-locales-control');
+    const objetivos = getVal('kolrrhh-locales-objetivos');
+    const compras = getVal('kolrrhh-locales-compras');
+    const comision = getVal('kolrrhh-locales-comision');
+    renderLocalesTotal();
+    const total = getVal('kolrrhh-locales-total');
+
+    if (!anio || !mes || !localId) {
+      setLocalesError('Faltan datos del local o período.');
+      return;
+    }
+
+    const payload = new URLSearchParams();
+    payload.set('action', 'kol_rrhh_save_desempeno_locales');
+    payload.set('nonce', KOL_RRHH.nonce);
+    payload.set('anio', String(anio));
+    payload.set('mes', String(mes));
+    payload.set('local_id', String(localId));
+    payload.set('control_caja_pct', control);
+    payload.set('objetivos_pct', objetivos);
+    payload.set('compras_pct', compras);
+    payload.set('total_pct', total);
+    payload.set('comision_coef', comision);
+
+    try{
+      const res = await fetch(KOL_RRHH.ajaxurl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+        body: payload.toString()
+      });
+      const json = await res.json();
+      if (!json || !json.success) {
+        setLocalesError(json?.data?.message || 'No se pudo guardar.');
+        return;
+      }
+      closeLocalesModal();
+      loadRendimientoLocales();
+    } catch (err) {
+      console.error(err);
+      setLocalesError('Error de red/servidor al guardar.');
     }
   });
 }
@@ -2012,6 +2067,7 @@ async function refreshDesempenoPersonalDesempeno(){
                       <th>Compras %</th>
                       <th>Total %</th>
                       <th>Comisión coef</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2023,6 +2079,25 @@ async function refreshDesempenoPersonalDesempeno(){
                         <td>${escapeHtml(String(r.compras_pct ?? '—'))}</td>
                         <td>${escapeHtml(String(r.total_pct ?? '—'))}</td>
                         <td>${escapeHtml(String(r.comision_coef ?? '—'))}</td>
+                        <td class="kolrrhh-locales-actions">
+                          <button
+                            type="button"
+                            class="kolrrhh-edit-icon kolrrhh-locales-edit"
+                            title="Editar rendimiento"
+                            aria-label="Editar rendimiento"
+                            data-anio="${escapeHtml(String(r.anio ?? ''))}"
+                            data-mes="${escapeHtml(String(r.mes ?? ''))}"
+                            data-local-id="${escapeHtml(String(r.local_id ?? ''))}"
+                            data-local-name="${escapeHtml(String(r.local_nombre ?? ''))}"
+                            data-control="${escapeHtml(String(r.control_caja_pct ?? ''))}"
+                            data-objetivos="${escapeHtml(String(r.objetivos_pct ?? ''))}"
+                            data-compras="${escapeHtml(String(r.compras_pct ?? ''))}"
+                            data-total="${escapeHtml(String(r.total_pct ?? ''))}"
+                            data-comision="${escapeHtml(String(r.comision_coef ?? ''))}"
+                          >
+                            ✎
+                          </button>
+                        </td>
                       </tr>
                     `).join('')}
                   </tbody>
@@ -2032,6 +2107,75 @@ async function refreshDesempenoPersonalDesempeno(){
           `).join('')}
         </div>
       `;
+    }
+
+    function parseLocalesNumber(value){
+      const n = parseFloat(String(value ?? '0').replace(',', '.'));
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function parseMesNumber(value){
+      const raw = String(value ?? '').trim();
+      if (!raw) return 0;
+      const iso = raw.match(/^(\d{4})-(\d{2})/);
+      if (iso) return parseInt(iso[2], 10) || 0;
+      const compact = raw.match(/^(\d{2})\/(\d{4})$/);
+      if (compact) return parseInt(compact[1], 10) || 0;
+      const n = parseInt(raw, 10);
+      return Number.isNaN(n) ? 0 : n;
+    }
+
+    function setLocalesError(msg){
+      const box = qs('kolrrhh-locales-error');
+      if (!box) return;
+      box.textContent = msg || 'Revisá los datos.';
+      box.style.display = 'block';
+    }
+
+    function clearLocalesError(){
+      const box = qs('kolrrhh-locales-error');
+      if (!box) return;
+      box.textContent = '';
+      box.style.display = 'none';
+    }
+
+    function renderLocalesTotal(){
+      const control = parseLocalesNumber(getVal('kolrrhh-locales-control'));
+      const objetivos = parseLocalesNumber(getVal('kolrrhh-locales-objetivos'));
+      const compras = parseLocalesNumber(getVal('kolrrhh-locales-compras'));
+      const total = control + objetivos + compras;
+      setVal('kolrrhh-locales-total', total ? total.toFixed(2) : '0');
+    }
+
+    function openLocalesModalFromButton(btn){
+      if (!btn) return;
+      clearLocalesError();
+      const anio = btn.dataset.anio || '';
+      const mesRaw = btn.dataset.mes || '';
+      const mes = parseMesNumber(mesRaw);
+      setVal('kolrrhh-locales-anio', anio);
+      setVal('kolrrhh-locales-mes', String(mes || ''));
+      setVal('kolrrhh-locales-local-id', btn.dataset.localId || '');
+      setText('kolrrhh-locales-title', btn.dataset.localName || '—');
+      const period = anio && mes ? `${anio}/${String(mes).padStart(2, '0')}` : '—';
+      setText('kolrrhh-locales-periodo', period);
+      setVal('kolrrhh-locales-control', btn.dataset.control || '');
+      setVal('kolrrhh-locales-objetivos', btn.dataset.objetivos || '');
+      setVal('kolrrhh-locales-compras', btn.dataset.compras || '');
+      setVal('kolrrhh-locales-comision', btn.dataset.comision || '');
+      renderLocalesTotal();
+
+      const modal = qs('kolrrhh-locales-modal');
+      if (!modal) return;
+      modal.classList.add('is-open');
+      modal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeLocalesModal(){
+      const modal = qs('kolrrhh-locales-modal');
+      if (!modal) return;
+      modal.classList.remove('is-open');
+      modal.setAttribute('aria-hidden', 'true');
     }
 
     async function loadRendimientoLocales(){
@@ -2050,7 +2194,9 @@ async function refreshDesempenoPersonalDesempeno(){
           body.innerHTML = `<div class="kolrrhh-muted" style="padding:14px;">${escapeHtml(msg)}</div>`;
           return;
         }
-        body.innerHTML = buildRendimientoTable(data.data?.rows || []);
+        const rows = data.data?.rows || [];
+        __CURRENT_RENDIMIENTO_LOCALES_ROWS__ = Array.isArray(rows) ? rows : [];
+        body.innerHTML = buildRendimientoTable(__CURRENT_RENDIMIENTO_LOCALES_ROWS__);
       } catch (err) {
         body.innerHTML = `<div class="kolrrhh-muted" style="padding:14px;">Error al cargar el rendimiento.</div>`;
       }
@@ -2074,6 +2220,14 @@ async function refreshDesempenoPersonalDesempeno(){
       __VIEW_MODE__ = 'employees';
       toggleTabs(true);
       renderEmptyDetail();
+    });
+
+    // Editar rendimiento por local
+    document.addEventListener('click', function(ev){
+      const editBtn = ev.target.closest('.kolrrhh-locales-edit');
+      if (!editBtn) return;
+      ev.preventDefault();
+      openLocalesModalFromButton(editBtn);
     });
 
     // ====== INPUT GUARDS / MASKS ======
@@ -2127,6 +2281,15 @@ async function refreshDesempenoPersonalDesempeno(){
     document.addEventListener('input', handleSueldoRefreshEvent);
     document.addEventListener('change', handleSueldoRefreshEvent);
 
+    document.addEventListener('input', function(ev){
+      const target = ev.target;
+      if (!target || !(target instanceof Element)) return;
+      if (!target.closest('#kolrrhh-locales-modal')) return;
+      if (target.matches('#kolrrhh-locales-control, #kolrrhh-locales-objetivos, #kolrrhh-locales-compras')) {
+        renderLocalesTotal();
+      }
+    });
+
     // Obra Social y Dirección max 100
     const osEl = qs('kolrrhh-modal-obra_social');
     if (osEl) {
@@ -2156,6 +2319,13 @@ async function refreshDesempenoPersonalDesempeno(){
       if (desClose) {
         ev.preventDefault();
         closeDesempenoModal();
+        return;
+      }
+
+      const localesClose = ev.target.closest('#kolrrhh-locales-modal [data-close="1"]');
+      if (localesClose) {
+        ev.preventDefault();
+        closeLocalesModal();
         return;
       }
 
