@@ -79,6 +79,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
   'locales' => $locales ?: [],
   'areas'   => $areas ?: [],
   'horas_bandas' => $horas_bandas ?: [],
+  'merchant_map' => $this->get_clover_merchant_map(),
 ]);
 
   }
