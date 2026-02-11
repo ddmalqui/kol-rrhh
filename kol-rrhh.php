@@ -555,9 +555,10 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
         </div>
       </div>
 
-      <div class="kolrrhh-modal-section-title">Detalles</div>
+      <div id="kolrrhh-sueldo-empleado-only" class="kolrrhh-sueldo-empleado-only">
+        <div class="kolrrhh-modal-section-title">Detalles</div>
 
-      <div class="kolrrhh-form-row" style="--cols:7;">
+        <div class="kolrrhh-form-row" style="--cols:7;">
         <div class="kolrrhh-form-field">
           <label class="kolrrhh-modal-label">Jornada</label>
           <input id="kolrrhh-sueldo-jornada" type="text" class="kolrrhh-modal-input kolrrhh-money" maxlength="80" placeholder="Ej: Completa / Media" />
@@ -696,6 +697,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
           </div>
           <div id="kolrrhh-sueldo-no-rem" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
+      </div>
       </div>
     </div>
 
