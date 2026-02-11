@@ -478,6 +478,28 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
 
       <input type="hidden" id="kolrrhh-sueldo-id" value="0" />
       <input type="hidden" id="kolrrhh-sueldo-legajo" value="" />
+      <input type="hidden" id="kolrrhh-sueldo-tipo" value="empleado" />
+
+      <div class="kolrrhh-sueldo-tabs" role="tablist" aria-label="Tipo de liquidación">
+        <button
+          type="button"
+          class="kolrrhh-sueldo-tab is-active"
+          role="tab"
+          aria-selected="true"
+          data-sueldo-tipo="empleado"
+        >
+          Empleado
+        </button>
+        <button
+          type="button"
+          class="kolrrhh-sueldo-tab"
+          role="tab"
+          aria-selected="false"
+          data-sueldo-tipo="monotributista"
+        >
+          Monotributista
+        </button>
+      </div>
 
 <div class="kolrrhh-form-row" style="--cols:7;">
         <div class="kolrrhh-form-field">

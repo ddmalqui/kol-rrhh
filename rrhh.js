@@ -1035,6 +1035,18 @@ if (desempenoSaveBtn) {
     });
   }
 
+
+  function setSueldoTipo(tipo){
+    const normalized = (tipo === 'monotributista') ? 'monotributista' : 'empleado';
+    setVal('kolrrhh-sueldo-tipo', normalized);
+
+    document.querySelectorAll('#kolrrhh-sueldo-modal .kolrrhh-sueldo-tab').forEach((btn) => {
+      const isActive = btn.getAttribute('data-sueldo-tipo') === normalized;
+      btn.classList.toggle('is-active', isActive);
+      btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+  }
+
   function openSueldoModal(row, legajoNum){
     const modal = qs('kolrrhh-sueldo-modal');
     if(!modal) return;
@@ -1043,6 +1055,7 @@ if (desempenoSaveBtn) {
     const title = qs('kolrrhh-sueldo-title');
     const isEdit = !!(row && row.id);
     if (title) title.textContent = isEdit ? 'Editar item de sueldo' : 'Agregar item de sueldo';
+    setSueldoTipo(row?.tipo_liquidacion || 'empleado');
 
     // hidden
     const idEl = qs('kolrrhh-sueldo-id');
@@ -2267,6 +2280,13 @@ async function refreshDesempenoPersonalDesempeno(){
       }
     });
 
+    document.addEventListener('click', function(ev){
+      const sueldoTab = ev.target.closest('#kolrrhh-sueldo-modal .kolrrhh-sueldo-tab');
+      if (!sueldoTab) return;
+      ev.preventDefault();
+      setSueldoTipo(sueldoTab.getAttribute('data-sueldo-tipo') || 'empleado');
+    });
+
     const localesSaveBtn = qs('kolrrhh-locales-save');
     if (localesSaveBtn) {
       localesSaveBtn.addEventListener('click', async function(ev){
@@ -2643,6 +2663,7 @@ if (finSel) finSel.addEventListener('change', () => {
         payload.set('rol', getVal('kolrrhh-sueldo-rol'));
         payload.set('horas', getVal('kolrrhh-sueldo-horas'));
         payload.set('participacion', getVal('kolrrhh-sueldo-participacion') || '0.0');
+        payload.set('tipo_liquidacion', getVal('kolrrhh-sueldo-tipo') || 'empleado');
         payload.set('area', getVal('kolrrhh-sueldo-area'));
         payload.set('jornada', getVal('kolrrhh-sueldo-jornada'));
 
