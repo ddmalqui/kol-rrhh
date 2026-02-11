@@ -75,6 +75,10 @@ const NO_REMUNERATIVO_FACTOR = 0.6;
     return el ? String(el.value || '').trim() : '';
   }
 
+  function isSueldoMonotributista(){
+    return getVal('kolrrhh-sueldo-tipo') === 'monotributista';
+  }
+
   function getPeriodoMesISO(){
     const fin = getVal('kolrrhh-sueldo-periodo-fin');
     const ini = getVal('kolrrhh-sueldo-periodo-inicio');
@@ -1035,6 +1039,42 @@ if (desempenoSaveBtn) {
     });
   }
 
+
+  function setSueldoTipo(tipo){
+    const normalized = (tipo === 'monotributista') ? 'monotributista' : 'empleado';
+    setVal('kolrrhh-sueldo-tipo', normalized);
+
+    document.querySelectorAll('#kolrrhh-sueldo-modal .kolrrhh-sueldo-tab').forEach((btn) => {
+      const isActive = btn.getAttribute('data-sueldo-tipo') === normalized;
+      btn.classList.toggle('is-active', isActive);
+      btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+
+    const onlyEmpleado = qs('kolrrhh-sueldo-empleado-only');
+    if (onlyEmpleado) {
+      onlyEmpleado.classList.toggle('kolrrhh-hidden', normalized === 'monotributista');
+    }
+
+    const efectivoEl = qs('kolrrhh-sueldo-efectivo');
+    if (efectivoEl) {
+      const isMonotributo = normalized === 'monotributista';
+      efectivoEl.readOnly = !isMonotributo;
+      efectivoEl.classList.toggle('nomodif', !isMonotributo);
+      if (isMonotributo) {
+        efectivoEl.style.background = '';
+      } else {
+        efectivoEl.style.background = 'rgba(0,0,0,.03)';
+      }
+    }
+
+    if (normalized === 'monotributista') {
+      actualizarTotalCobrar();
+    } else {
+      refreshAllSueldoCalculations();
+      calcularEfectivoAutomatico();
+    }
+  }
+
   function openSueldoModal(row, legajoNum){
     const modal = qs('kolrrhh-sueldo-modal');
     if(!modal) return;
@@ -1043,6 +1083,7 @@ if (desempenoSaveBtn) {
     const title = qs('kolrrhh-sueldo-title');
     const isEdit = !!(row && row.id);
     if (title) title.textContent = isEdit ? 'Editar item de sueldo' : 'Agregar item de sueldo';
+    setSueldoTipo(row?.tipo_liquidacion || 'empleado');
 
     // hidden
     const idEl = qs('kolrrhh-sueldo-id');
@@ -1166,8 +1207,12 @@ if (partSel) {
     __CURRENT_DESEMPENO_ROWS__ = [];
 
     // ✅ Traer Base desde la tabla (según Rol + Horas)
-    refreshBaseFromDB();
-    refreshComisionFromDB();
+    if (isSueldoMonotributista()) {
+      actualizarTotalCobrar();
+    } else {
+      refreshBaseFromDB();
+      refreshComisionFromDB();
+    }
 
     clearSueldoError();
 
@@ -1288,6 +1333,10 @@ function refreshNoRemFromState(){
 }
 
 function refreshAllSueldoCalculations(){
+  if (isSueldoMonotributista()) {
+    actualizarTotalCobrar();
+    return;
+  }
   renderComisionFromState();
   refreshAntigFromState();
   refreshNoRemFromState();
@@ -1590,11 +1639,15 @@ async function refreshDesempenoPersonalDesempeno(){
       const rol = (r.rol || '—').toString().toUpperCase();
       const area = r.area ? r.area : '—';
       const part = formatParticipacionAR(r.participacion ?? '0');
+      const tipoRaw = String(r.tipo_liquidacion || 'empleado').toLowerCase();
+      const tipoLabel = (tipoRaw === 'monotributista') ? 'MONOTRIBUTISTA' : 'EMPLEADO';
 
       return `
         <div class="kolrrhh-sueldo-card" data-sueldo-id="${r.id}">
           <div class="kolrrhh-sueldo-card-headrow">
-            <div class="kolrrhh-period-badge">
+            <div class="kolrrhh-sueldo-period-wrap">
+              <div class="kolrrhh-sueldo-tipo">${escapeHtml(tipoLabel)}</div>
+              <div class="kolrrhh-period-badge">
               <div class="kolrrhh-datebox">
                 <div class="kolrrhh-datebox-mon">${escapeHtml(a.mon)}</div>
                 <div class="kolrrhh-datebox-day">${escapeHtml(a.day)}</div>
@@ -1607,6 +1660,7 @@ async function refreshDesempenoPersonalDesempeno(){
                 <div class="kolrrhh-datebox-year">${escapeHtml(b.year)}</div>
               </div>
                           <div class="kolrrhh-sueldo-days" style="margin-left:12px;white-space:nowrap;font-size:12px;opacity:.85;">Dias Trab.: <strong>${escapeHtml(String(r.dias_de_trabajo ?? ''))}</strong></div>
+              </div>
             </div>
 
         <div class="kolrrhh-sueldo-role">
@@ -2267,6 +2321,13 @@ async function refreshDesempenoPersonalDesempeno(){
       }
     });
 
+    document.addEventListener('click', function(ev){
+      const sueldoTab = ev.target.closest('#kolrrhh-sueldo-modal .kolrrhh-sueldo-tab');
+      if (!sueldoTab) return;
+      ev.preventDefault();
+      setSueldoTipo(sueldoTab.getAttribute('data-sueldo-tipo') || 'empleado');
+    });
+
     const localesSaveBtn = qs('kolrrhh-locales-save');
     if (localesSaveBtn) {
       localesSaveBtn.addEventListener('click', async function(ev){
@@ -2643,6 +2704,7 @@ if (finSel) finSel.addEventListener('change', () => {
         payload.set('rol', getVal('kolrrhh-sueldo-rol'));
         payload.set('horas', getVal('kolrrhh-sueldo-horas'));
         payload.set('participacion', getVal('kolrrhh-sueldo-participacion') || '0.0');
+        payload.set('tipo_liquidacion', getVal('kolrrhh-sueldo-tipo') || 'empleado');
         payload.set('area', getVal('kolrrhh-sueldo-area'));
         payload.set('jornada', getVal('kolrrhh-sueldo-jornada'));
 
@@ -2720,6 +2782,11 @@ function limpiarMontoKOL(id) {
 
 // 2. La función principal que hace la cuenta
 function calcularEfectivoAutomatico() {
+    if (isSueldoMonotributista()) {
+      actualizarTotalCobrar();
+      return;
+    }
+
     // Sumas (Haberes)
     const jornada     = limpiarMontoKOL('kolrrhh-sueldo-jornada');
     const bono        = limpiarMontoKOL('kolrrhh-sueldo-bono');
@@ -2785,7 +2852,7 @@ function actualizarTotalCobrar() {
 const idsInputsSueldo = [
     'kolrrhh-sueldo-jornada', 'kolrrhh-sueldo-bono', 'kolrrhh-sueldo-descuentos',
     'kolrrhh-sueldo-vac-tomadas', 'kolrrhh-sueldo-feriados', 'kolrrhh-sueldo-liquidacion',
-    'kolrrhh-sueldo-vac-no-tomadas', 'kolrrhh-sueldo-transferencia', 'kolrrhh-sueldo-creditos'
+    'kolrrhh-sueldo-vac-no-tomadas', 'kolrrhh-sueldo-efectivo', 'kolrrhh-sueldo-transferencia', 'kolrrhh-sueldo-creditos'
 ];
 
 idsInputsSueldo.forEach(id => {

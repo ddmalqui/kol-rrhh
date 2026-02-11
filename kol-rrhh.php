@@ -478,6 +478,28 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
 
       <input type="hidden" id="kolrrhh-sueldo-id" value="0" />
       <input type="hidden" id="kolrrhh-sueldo-legajo" value="" />
+      <input type="hidden" id="kolrrhh-sueldo-tipo" value="empleado" />
+
+      <div class="kolrrhh-sueldo-tabs" role="tablist" aria-label="Tipo de liquidación">
+        <button
+          type="button"
+          class="kolrrhh-sueldo-tab is-active"
+          role="tab"
+          aria-selected="true"
+          data-sueldo-tipo="empleado"
+        >
+          Empleado
+        </button>
+        <button
+          type="button"
+          class="kolrrhh-sueldo-tab"
+          role="tab"
+          aria-selected="false"
+          data-sueldo-tipo="monotributista"
+        >
+          Monotributista
+        </button>
+      </div>
 
 <div class="kolrrhh-form-row" style="--cols:7;">
         <div class="kolrrhh-form-field">
@@ -533,9 +555,10 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
         </div>
       </div>
 
-      <div class="kolrrhh-modal-section-title">Detalles</div>
+      <div id="kolrrhh-sueldo-empleado-only" class="kolrrhh-sueldo-empleado-only">
+        <div class="kolrrhh-modal-section-title">Detalles</div>
 
-      <div class="kolrrhh-form-row" style="--cols:7;">
+        <div class="kolrrhh-form-row" style="--cols:7;">
         <div class="kolrrhh-form-field">
           <label class="kolrrhh-modal-label">Jornada</label>
           <input id="kolrrhh-sueldo-jornada" type="text" class="kolrrhh-modal-input kolrrhh-money" maxlength="80" placeholder="Ej: Completa / Media" />
@@ -674,6 +697,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
           </div>
           <div id="kolrrhh-sueldo-no-rem" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
+      </div>
       </div>
     </div>
 
@@ -816,6 +840,25 @@ private function sueldos_items_table(){
   return $wpdb->prefix . 'kol_rrhh_items_sueldos';
 }
 
+private function ensure_sueldos_tipo_liquidacion_column(){
+  global $wpdb;
+  $table = $this->sueldos_items_table();
+
+  $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table));
+  if ($exists !== $table) {
+    return false;
+  }
+
+  $has_col = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", 'tipo_liquidacion'));
+  if ($has_col === 'tipo_liquidacion') {
+    return true;
+  }
+
+  $wpdb->query("ALTER TABLE {$table} ADD COLUMN tipo_liquidacion VARCHAR(20) NOT NULL DEFAULT 'empleado' AFTER horas");
+  $has_col_after = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", 'tipo_liquidacion'));
+  return $has_col_after === 'tipo_liquidacion';
+}
+
 public function ajax_get_sueldo_items(){
   if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
     wp_send_json_error(['message' => 'Nonce inválido']);
@@ -836,9 +879,11 @@ public function ajax_get_sueldo_items(){
     wp_send_json_success(['rows' => []]);
   }
 
+  $this->ensure_sueldos_tipo_liquidacion_column();
+
   $rows = $wpdb->get_results(
     $wpdb->prepare(
-      "SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, area, rol, participacion, horas,
+      "SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, area, rol, participacion, horas, tipo_liquidacion,
               efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas
        FROM {$table}
        WHERE legajo = %d
@@ -1510,6 +1555,12 @@ if (!$rol || !$area) {
   $horas = floatval($horas_raw);
   if ($horas < 0) $horas = 0;
 
+  $tipo_liquidacion = sanitize_text_field($_POST['tipo_liquidacion'] ?? 'empleado');
+  $tipo_liquidacion = strtolower(trim($tipo_liquidacion));
+  if (!in_array($tipo_liquidacion, ['empleado', 'monotributista'], true)) {
+    $tipo_liquidacion = 'empleado';
+  }
+
   // Dinero: viene como string, convertimos a número (float)
   $to_num = function($v){
     $v = is_string($v) ? $v : '';
@@ -1540,6 +1591,8 @@ if (!$rol || !$area) {
     wp_send_json_error(['message' => 'Tabla de sueldos no existe']);
   }
 
+  $this->ensure_sueldos_tipo_liquidacion_column();
+
   $data = [
     'legajo' => $legajo,
     'periodo_inicio' => $periodo_inicio,
@@ -1549,6 +1602,7 @@ if (!$rol || !$area) {
     'participacion' => $participacion,
     'area' => $area,
     'horas' => $horas,
+    'tipo_liquidacion' => $tipo_liquidacion,
     'efectivo' => $efectivo,
     'transferencia' => $transferencia,
     'creditos' => $creditos,
@@ -1560,18 +1614,18 @@ if (!$rol || !$area) {
     'liquidacion' => $liquidacion,
     'vac_no_tomadas' => $vac_no_tomadas
   ];
-$formats = ['%d','%s','%s','%f','%s','%f','%s','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f'];
+$formats = ['%d','%s','%s','%f','%s','%f','%s','%f','%s','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f'];
 
   if ($id > 0) {
     $ok = $wpdb->update($table, $data, ['id' => $id], $formats, ['%d']);
     if ($ok === false) wp_send_json_error(['message' => 'No se pudo actualizar']);
-    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $id), ARRAY_A);
+    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $id), ARRAY_A);
     wp_send_json_success(['row' => $row]);
   } else {
     $ok = $wpdb->insert($table, $data, $formats);
     if (!$ok) wp_send_json_error(['message' => 'No se pudo insertar']);
     $new_id = intval($wpdb->insert_id);
-    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $new_id), ARRAY_A);
+    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $new_id), ARRAY_A);
     wp_send_json_success(['row' => $row]);
   }
 }
