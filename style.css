@@ -71,6 +71,26 @@
   filter: brightness(0.98);
 }
 
+/* Filtro de personal */
+.kolrrhh-filter{
+  padding: 10px 14px 0;
+}
+.kolrrhh-filter-input{
+  width: 100%;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,.12);
+  background: #fff;
+  padding: 0 12px;
+  font-size: 14px;
+  outline: none;
+  box-shadow: 0 6px 14px rgba(0,0,0,.05);
+}
+.kolrrhh-filter-input:focus{
+  border-color: rgba(46, 204, 113, .6);
+  box-shadow: 0 0 0 3px rgba(46, 204, 113, .15);
+}
+
 /* ===== Scroll de lista ===== */
 .kolrrhh-left-scroll{
   margin-top: 12px;

@@ -208,6 +208,16 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
             </div>
           </div>
 
+          <div class="kolrrhh-filter">
+            <input
+              type="text"
+              id="kolrrhh-filter-input"
+              class="kolrrhh-filter-input"
+              placeholder="Filtrar por nombre o apellido..."
+              autocomplete="off"
+            />
+          </div>
+
           <div class="kolrrhh-left-scroll">
             <div class="kolrrhh-section">
               <div class="kolrrhh-section-h">Activos</div>
@@ -1717,7 +1727,7 @@ $clover_employee_id = preg_replace('/\s*,\s*/', ',', $clover_employee_id);
       ];
 
       $html .= sprintf(
-        '<button class="kolrrhh-item" type="button" data-emp="%s">
+        '<button class="kolrrhh-item" type="button" data-emp="%s" data-filter-name="%s">
           <span class="kolrrhh-leftcol">
             <span class="kolrrhh-avatar" aria-hidden="true">%s</span>
             <span class="kolrrhh-meta">
@@ -1731,6 +1741,7 @@ $clover_employee_id = preg_replace('/\s*,\s*/', ',', $clover_employee_id);
           </span>
         </button>',
         esc_attr(wp_json_encode($payload, JSON_UNESCAPED_UNICODE)),
+        esc_attr($nombre),
         esc_html($ini),
         esc_html($nombre),
         esc_html(str_pad(preg_replace('/\D+/', '', $legajo), 4, '0', STR_PAD_LEFT)),

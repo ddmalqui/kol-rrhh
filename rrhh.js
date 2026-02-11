@@ -1832,6 +1832,39 @@ async function refreshDesempenoPersonalDesempeno(){
   });
 
   document.addEventListener('DOMContentLoaded', function () {
+    const normalizeText = (value) => String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+
+    const filterInput = qs('kolrrhh-filter-input');
+    if (filterInput) {
+      const items = Array.from(document.querySelectorAll('.kolrrhh-item'));
+      const normalizedNames = new Map();
+      items.forEach((item) => {
+        const rawName = item.getAttribute('data-filter-name') || '';
+        normalizedNames.set(item, normalizeText(rawName));
+      });
+
+      const applyFilter = () => {
+        const query = normalizeText(filterInput.value).trim();
+        if (!query) {
+          items.forEach(item => { item.style.display = ''; });
+          return;
+        }
+
+        const queryParts = query.split(/\s+/).filter(Boolean);
+        items.forEach((item) => {
+          const nameValue = normalizedNames.get(item) || '';
+          const words = nameValue.split(/\s+/).filter(Boolean);
+          const matches = queryParts.every((part) => words.some(word => word.startsWith(part)));
+          item.style.display = matches ? '' : 'none';
+        });
+      };
+
+      filterInput.addEventListener('input', applyFilter);
+    }
+
     // === Tabs (Items Sueldo / Desempeno / Fichaje) ===
     document.addEventListener('click', function(ev){
       const tab = ev.target.closest('.kolrrhh-tab');
