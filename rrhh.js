@@ -1639,11 +1639,15 @@ async function refreshDesempenoPersonalDesempeno(){
       const rol = (r.rol || '—').toString().toUpperCase();
       const area = r.area ? r.area : '—';
       const part = formatParticipacionAR(r.participacion ?? '0');
+      const tipoRaw = String(r.tipo_liquidacion || 'empleado').toLowerCase();
+      const tipoLabel = (tipoRaw === 'monotributista') ? 'MONOTRIBUTISTA' : 'EMPLEADO';
 
       return `
         <div class="kolrrhh-sueldo-card" data-sueldo-id="${r.id}">
           <div class="kolrrhh-sueldo-card-headrow">
-            <div class="kolrrhh-period-badge">
+            <div class="kolrrhh-sueldo-period-wrap">
+              <div class="kolrrhh-sueldo-tipo">${escapeHtml(tipoLabel)}</div>
+              <div class="kolrrhh-period-badge">
               <div class="kolrrhh-datebox">
                 <div class="kolrrhh-datebox-mon">${escapeHtml(a.mon)}</div>
                 <div class="kolrrhh-datebox-day">${escapeHtml(a.day)}</div>
@@ -1656,6 +1660,7 @@ async function refreshDesempenoPersonalDesempeno(){
                 <div class="kolrrhh-datebox-year">${escapeHtml(b.year)}</div>
               </div>
                           <div class="kolrrhh-sueldo-days" style="margin-left:12px;white-space:nowrap;font-size:12px;opacity:.85;">Dias Trab.: <strong>${escapeHtml(String(r.dias_de_trabajo ?? ''))}</strong></div>
+              </div>
             </div>
 
         <div class="kolrrhh-sueldo-role">
