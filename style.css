@@ -871,7 +871,7 @@
 .kolrrhh-sueldo-modal-actions{
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .kolrrhh-sueldo-total{
@@ -896,9 +896,9 @@
 .kolrrhh-sueldo-actions{
   margin-left:auto;
   display:flex;
-  flex-direction:column;
+  flex-direction:row;
   align-items:flex-end;
-  gap:6px;
+  gap:12px;
 }
 
 .kolrrhh-sueldo-item-total{
