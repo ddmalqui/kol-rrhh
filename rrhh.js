@@ -1640,7 +1640,9 @@ async function refreshDesempenoPersonalDesempeno(){
       const area = r.area ? r.area : '—';
       const part = formatParticipacionAR(r.participacion ?? '0');
       const tipoRaw = String(r.tipo_liquidacion || 'empleado').toLowerCase();
+      const isMonotributista = tipoRaw === 'monotributista';
       const tipoLabel = (tipoRaw === 'monotributista') ? 'MONOTRIBUTISTA' : 'EMPLEADO';
+      const totalCobrar = Number(r.efectivo || 0) + Number(r.transferencia || 0) + Number(r.creditos || 0);
 
       return `
         <div class="kolrrhh-sueldo-card" data-sueldo-id="${r.id}">
@@ -1670,8 +1672,11 @@ async function refreshDesempenoPersonalDesempeno(){
 
 
             <div class="kolrrhh-sueldo-actions">
-              <button type="button" class="kolrrhh-btn kolrrhh-btn-small" data-sueldo-edit="1" data-id="${r.id}">Editar</button>
-              <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary" data-sueldo-print="1" data-id="${r.id}">PDF</button>
+              <div class="kolrrhh-sueldo-item-total">${moneyAR(totalCobrar)}</div>
+              <div class="kolrrhh-sueldo-actions-buttons">
+                <button type="button" class="kolrrhh-btn kolrrhh-btn-small" data-sueldo-edit="1" data-id="${r.id}">Editar</button>
+                <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary" data-sueldo-print="1" data-id="${r.id}">PDF</button>
+              </div>
             </div>
           </div>
 
@@ -1696,6 +1701,7 @@ async function refreshDesempenoPersonalDesempeno(){
             </table>
           </div>
 
+          ${isMonotributista ? '' : `
           <!-- DETALLES -->
           <div class="kolrrhh-sueldo-section">
             <div class="kolrrhh-sueldo-section-title">Detalles</div>
@@ -1724,6 +1730,7 @@ async function refreshDesempenoPersonalDesempeno(){
               </tbody>
             </table>
           </div>
+          `}
 
         </div>
       `;
