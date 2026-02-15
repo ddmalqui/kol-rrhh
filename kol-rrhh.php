@@ -859,6 +859,48 @@ private function ensure_sueldos_tipo_liquidacion_column(){
   return $has_col_after === 'tipo_liquidacion';
 }
 
+private function ensure_sueldos_participacion_decimal_column(){
+  global $wpdb;
+  $table = $this->sueldos_items_table();
+
+  $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table));
+  if ($exists !== $table) {
+    return false;
+  }
+
+  $col = $wpdb->get_row("SHOW COLUMNS FROM {$table} LIKE 'participacion'", ARRAY_A);
+  if (!$col || empty($col['Type'])) {
+    return false;
+  }
+
+  $type = strtolower((string) $col['Type']);
+  $needs_alter = true;
+
+  if (preg_match('/^decimal\((\d+),(\d+)\)$/', $type, $m)) {
+    $scale = intval($m[2]);
+    $needs_alter = ($scale < 2);
+  } elseif (strpos($type, 'float') === 0 || strpos($type, 'double') === 0) {
+    $needs_alter = false;
+  }
+
+  if (!$needs_alter) {
+    return true;
+  }
+
+  $wpdb->query("ALTER TABLE {$table} MODIFY COLUMN participacion DECIMAL(4,2) NOT NULL DEFAULT 0.00");
+  $col_after = $wpdb->get_row("SHOW COLUMNS FROM {$table} LIKE 'participacion'", ARRAY_A);
+  if (!$col_after || empty($col_after['Type'])) {
+    return false;
+  }
+
+  $type_after = strtolower((string) $col_after['Type']);
+  if (preg_match('/^decimal\((\d+),(\d+)\)$/', $type_after, $m_after)) {
+    return intval($m_after[2]) >= 2;
+  }
+
+  return (strpos($type_after, 'float') === 0 || strpos($type_after, 'double') === 0);
+}
+
 public function ajax_get_sueldo_items(){
   if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
     wp_send_json_error(['message' => 'Nonce inválido']);
@@ -880,6 +922,7 @@ public function ajax_get_sueldo_items(){
   }
 
   $this->ensure_sueldos_tipo_liquidacion_column();
+  $this->ensure_sueldos_participacion_decimal_column();
 
   $rows = $wpdb->get_results(
     $wpdb->prepare(
@@ -1592,6 +1635,7 @@ if (!$rol || !$area) {
   }
 
   $this->ensure_sueldos_tipo_liquidacion_column();
+  $this->ensure_sueldos_participacion_decimal_column();
 
   $data = [
     'legajo' => $legajo,
