@@ -1382,7 +1382,12 @@ async function refreshBaseFromDB(){
     return;
   }
 
-    const base = Number(json.data?.base || 0);
+    const baseTabla = Number(json.data?.base || 0);
+    const diasRaw = String(getVal('kolrrhh-sueldo-dias-trabajo') || '').trim();
+    const diasNormalizado = diasRaw.replace(',', '.');
+    const diasTrabajados = diasNormalizado ? parseFloat(diasNormalizado) : 0;
+    const proporcionDias = Math.max(0, isFinite(diasTrabajados) ? diasTrabajados : 0) / 26;
+    const base = baseTabla * proporcionDias;
 
     __CURRENT_BASE__ = base;
 

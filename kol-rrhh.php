@@ -639,7 +639,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
               i
             </button>
           </div>
-          <div id="kolrrhh-base-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">base:</div>
+          <div id="kolrrhh-base-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">basico: tabla basico * dias trabajados/26.</div>
           <div id="kolrrhh-sueldo-base" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
         <div class="kolrrhh-form-field kolrrhh-form-field--with-popover">
