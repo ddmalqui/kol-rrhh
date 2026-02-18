@@ -1503,10 +1503,13 @@ async function refreshComisionFromDB(){
     const comisionCoef = (json && json.success && json.data && json.data.comision_coef !== undefined)
       ? Number(json.data.comision_coef || 0)
       : 0;
+    const rendimientoLocal = (json && json.success && json.data && json.data.rendimiento_local !== undefined)
+      ? Number(json.data.rendimiento_local || 0)
+      : 0;
 
     const comisionBase = ventas * comisionCoef;
     __CURRENT_COMISION_BASE__ = isFinite(comisionBase) ? comisionBase : 0;
-    __CURRENT_RENDIMIENTO_COEF__ = isFinite(comisionCoef) ? comisionCoef : 0;
+    __CURRENT_RENDIMIENTO_COEF__ = isFinite(rendimientoLocal) ? rendimientoLocal : 0;
 
     // Mostrar
     renderComisionFromState();

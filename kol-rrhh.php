@@ -1352,11 +1352,15 @@ public function ajax_get_comision(){
   foreach (['comision_coef','comision','coeficiente_comision'] as $c){
     if (in_array($c, $cols_r, true)) { $colRendComision = $c; break; }
   }
+  $colRendTotal = '';
+  foreach (['total_pct','total'] as $c){
+    if (in_array($c, $cols_r, true)) { $colRendTotal = $c; break; }
+  }
 
   if (!$colLocId || !$colLocName || !$colVentaLoc || !$colVentaAnio || !$colVentaMes || !$colVentaMonto){
     wp_send_json_error(['message' => 'No se pudieron detectar columnas necesarias en locales/ventas_mensuales.']);
   }
-  if (!$colRendAnio || !$colRendMes || !$colRendLoc || !$colRendComision){
+  if (!$colRendAnio || !$colRendMes || !$colRendLoc || !$colRendComision || !$colRendTotal){
     wp_send_json_error(['message' => 'No se pudieron detectar columnas necesarias en rendimiento_locales.']);
   }
 
@@ -1365,7 +1369,7 @@ public function ajax_get_comision(){
   );
 
   if (!$local_id){
-    wp_send_json_success(['ventas' => 0, 'comision_coef' => 0, 'comision' => 0]);
+    wp_send_json_success(['ventas' => 0, 'comision_coef' => 0, 'comision' => 0, 'rendimiento_local' => 0]);
   }
 
   $sql = "
@@ -1386,7 +1390,7 @@ public function ajax_get_comision(){
 
   $row = $wpdb->get_row(
     $wpdb->prepare(
-      "SELECT r.{$colRendComision} AS comision_coef
+      "SELECT r.{$colRendComision} AS comision_coef, r.{$colRendTotal} AS rendimiento_local
        FROM {$t_rend} r
        WHERE r.{$colRendLoc} = %d
          AND r.{$colRendAnio} = %d
@@ -1403,6 +1407,10 @@ public function ajax_get_comision(){
   if ($row && isset($row['comision_coef'])){
     $comision_coef = floatval(str_replace(',', '.', (string)$row['comision_coef']));
   }
+  $rendimiento_local = 0;
+  if ($row && isset($row['rendimiento_local'])){
+    $rendimiento_local = floatval(str_replace(',', '.', (string)$row['rendimiento_local']));
+  }
 
   $comision = $ventas * $comision_coef;
 
@@ -1410,6 +1418,7 @@ public function ajax_get_comision(){
     'ventas' => $ventas,
     'comision_coef' => $comision_coef,
     'comision' => $comision,
+    'rendimiento_local' => $rendimiento_local,
   ]);
 }
 public function ajax_save_desempeno_item(){
