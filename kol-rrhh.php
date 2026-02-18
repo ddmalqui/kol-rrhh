@@ -18,6 +18,7 @@ final class KOL_RRHH_Plugin {
     add_action('wp_ajax_kol_rrhh_save_employee', [$this,'ajax_save_employee']);
     add_action('wp_ajax_kol_rrhh_get_sueldo_items', [$this,'ajax_get_sueldo_items']);
     add_action('wp_ajax_kol_rrhh_save_sueldo_item', [$this,'ajax_save_sueldo_item']);
+    add_action('wp_ajax_kol_rrhh_delete_sueldo_item', [$this,'ajax_delete_sueldo_item']);
     add_action('wp_ajax_kol_rrhh_get_desempeno_items', [$this,'ajax_get_desempeno_items']);
     add_action('wp_ajax_kol_rrhh_get_desempeno_locales', [$this,'ajax_get_desempeno_locales']);
     add_action('wp_ajax_kol_rrhh_save_desempeno_locales', [$this,'ajax_save_desempeno_locales']);
@@ -1500,6 +1501,36 @@ public function ajax_delete_desempeno_item(){
   }
 
   wp_send_json_success(['deleted' => 1]);
+}
+
+public function ajax_delete_sueldo_item(){
+  if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
+    wp_send_json_error(['message' => 'Nonce inválido']);
+  }
+  if (!is_user_logged_in()) {
+    wp_send_json_error(['message' => 'No autorizado']);
+  }
+
+  $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+  if ($id <= 0) wp_send_json_error(['message' => 'ID inválido']);
+
+  global $wpdb;
+  $table = $this->sueldos_items_table();
+
+  $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table));
+  if ($exists !== $table) {
+    wp_send_json_error(['message' => 'La tabla de sueldos no existe']);
+  }
+
+  $ok = $wpdb->delete($table, ['id' => $id], ['%d']);
+  if ($ok === false) {
+    wp_send_json_error(['message' => 'No se pudo eliminar']);
+  }
+  if ((int)$ok === 0) {
+    wp_send_json_error(['message' => 'El item ya no existe']);
+  }
+
+  wp_send_json_success(['deleted' => 1, 'id' => $id]);
 }
 
 

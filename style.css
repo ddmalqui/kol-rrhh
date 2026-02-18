@@ -928,6 +928,32 @@
   display:flex;
   gap:12px;
 }
+.kolrrhh-sueldo-card-delete{
+  display:flex;
+  justify-content:flex-end;
+  margin-top:12px;
+}
+.kolrrhh-sueldo-delete-btn{
+  width:34px;
+  height:34px;
+  border-radius:10px;
+  border:1px solid rgba(200,60,60,.55);
+  background:rgba(200,60,60,.06);
+  color:rgba(200,60,60,.95);
+  font-size:16px;
+  line-height:1;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+.kolrrhh-sueldo-delete-btn:hover{
+  background:rgba(200,60,60,.10);
+}
+.kolrrhh-sueldo-delete-btn:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+}
 
 /* tabla detalles: un toque más compacta */
 .kolrrhh-sueldo-table-details th,

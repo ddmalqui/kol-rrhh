@@ -1732,6 +1732,17 @@ async function refreshDesempenoPersonalDesempeno(){
           </div>
           `}
 
+          <div class="kolrrhh-sueldo-card-delete">
+            <button
+              type="button"
+              class="kolrrhh-sueldo-delete-btn"
+              data-sueldo-del="1"
+              data-id="${r.id}"
+              aria-label="Eliminar item de sueldo"
+              title="Eliminar item"
+            >&#128465;</button>
+          </div>
+
         </div>
       `;
     }).join('');
@@ -2663,6 +2674,50 @@ if (finSel) finSel.addEventListener('change', () => {
 
         const url = `${KOL_RRHH.ajaxurl}?action=kol_rrhh_print_sueldo_item&nonce=${encodeURIComponent(KOL_RRHH.nonce)}&id=${id}`;
         window.open(url, '_blank');
+        return;
+      }
+
+      // Eliminar item (delegación)
+      const del = ev.target.closest('[data-sueldo-del="1"]');
+      if (del) {
+        ev.preventDefault();
+        const leg = Number((sueldoHost?.dataset?.legajo) || 0);
+        const id = Number(del.getAttribute('data-id') || 0);
+        if (!leg || !id) return;
+
+        if (!confirm('¿Eliminar este item de sueldo? Esta acción no se puede deshacer.')) return;
+
+        const oldContent = del.innerHTML;
+        del.disabled = true;
+        del.textContent = '...';
+
+        const payload = new URLSearchParams();
+        payload.set('action', 'kol_rrhh_delete_sueldo_item');
+        payload.set('nonce', KOL_RRHH.nonce);
+        payload.set('id', String(id));
+
+        fetch(KOL_RRHH.ajaxurl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+          body: payload.toString()
+        })
+        .then(r => r.json())
+        .then(json => {
+          if (!json || !json.success) {
+            alert(json?.data?.message || 'No se pudo eliminar el item.');
+            del.disabled = false;
+            del.innerHTML = oldContent;
+            return;
+          }
+
+          __LAST_SUELDO_ROWS__ = (__LAST_SUELDO_ROWS__ || []).filter(x => Number(x.id) !== id);
+          renderSueldoItemsStyled(__LAST_SUELDO_ROWS__, leg);
+        })
+        .catch(() => {
+          alert('Error de red/servidor al eliminar.');
+          del.disabled = false;
+          del.innerHTML = oldContent;
+        });
         return;
       }
     });
