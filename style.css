@@ -974,6 +974,18 @@
 .kolrrhh-modal-top.is-only-close{ justify-content:flex-end; }
 .kolrrhh-modal-top.is-only-close .kolrrhh-modal-title{ display:none; }
 
+.kolrrhh-no-access{
+  margin: 20px auto;
+  max-width: 720px;
+  padding: 18px 20px;
+  border-radius: 12px;
+  border: 1px solid rgba(200,60,60,.35);
+  background: rgba(200,60,60,.08);
+  color: #7a1717;
+  font-weight: 700;
+  text-align: center;
+}
+
 
 /* ===== Desempeño grid ===== */
 .kolrrhh-tabpane { display:none; }

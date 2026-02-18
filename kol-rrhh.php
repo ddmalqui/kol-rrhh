@@ -141,6 +141,35 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
     return $wpdb->prefix . 'kol_rrhh';
   }
 
+  private function allowed_access_emails(){
+    return [
+      'kolaccesoriosadm@gmail.com',
+      'hola@kolaccesorios.com',
+      'moniplotnic@hotmail.com',
+      'kolaccesorios.procedimientos@gmail.com',
+    ];
+  }
+
+  private function has_plugin_access(){
+    if (!is_user_logged_in()) return false;
+    $user = wp_get_current_user();
+    $email = strtolower(trim((string)($user->user_email ?? '')));
+    if ($email === '') return false;
+    return in_array($email, $this->allowed_access_emails(), true);
+  }
+
+  private function ajax_require_plugin_access(){
+    if (!$this->has_plugin_access()) {
+      wp_send_json_error([
+        'message' => 'No tenés acceso a este módulo. Solicitá acceso a administración.'
+      ]);
+    }
+  }
+
+  private function render_access_denied_notice(){
+    return '<div class="kolrrhh-no-access">No tenés acceso a este módulo. Solicitá acceso a administración.</div>';
+  }
+
   private function fetch_empleados(){
     global $wpdb;
     $table = $this->table_name();
@@ -174,6 +203,11 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
   }
 
   public function shortcode($atts = []){
+    if (!$this->has_plugin_access()) {
+      wp_enqueue_style('kol-rrhh-style');
+      return $this->render_access_denied_notice();
+    }
+
     wp_enqueue_style('kol-rrhh-style');
     wp_enqueue_script('kol-rrhh-js');
 
@@ -906,9 +940,7 @@ public function ajax_get_sueldo_items(){
   if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
     wp_send_json_error(['message' => 'Nonce inválido']);
   }
-  if (!is_user_logged_in()) {
-    wp_send_json_error(['message' => 'No autorizado']);
-  }
+  $this->ajax_require_plugin_access();
 
   $legajo = isset($_POST['legajo']) ? intval($_POST['legajo']) : 0;
   if ($legajo <= 0) wp_send_json_error(['message' => 'Legajo inválido']);
@@ -950,9 +982,7 @@ public function ajax_get_desempeno_items(){
   if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
     wp_send_json_error(['message' => 'Nonce inválido']);
   }
-  if (!is_user_logged_in()) {
-    wp_send_json_error(['message' => 'No autorizado']);
-  }
+  $this->ajax_require_plugin_access();
 
   $legajo = isset($_POST['legajo']) ? intval($_POST['legajo']) : 0;
   if ($legajo <= 0) wp_send_json_error(['message' => 'Legajo inválido']);
@@ -987,9 +1017,7 @@ public function ajax_get_desempeno_items(){
 
 public function ajax_get_desempeno_locales(){
   check_ajax_referer('kol_rrhh_nonce', 'nonce');
-  if (!is_user_logged_in()) {
-    wp_send_json_error(['message' => 'No autorizado']);
-  }
+  $this->ajax_require_plugin_access();
 
   global $wpdb;
   $t_desempeno = $wpdb->prefix . 'kol_rrhh_desempeno_locales';
@@ -1080,9 +1108,7 @@ public function ajax_get_desempeno_locales(){
 
 public function ajax_save_desempeno_locales(){
   check_ajax_referer('kol_rrhh_nonce', 'nonce');
-  if (!is_user_logged_in()) {
-    wp_send_json_error(['message' => 'No autorizado']);
-  }
+  $this->ajax_require_plugin_access();
 
   $anio = isset($_POST['anio']) ? intval($_POST['anio']) : 0;
   $mes = isset($_POST['mes']) ? intval($_POST['mes']) : 0;
@@ -1197,6 +1223,7 @@ public function ajax_save_desempeno_locales(){
 
 public function ajax_get_base(){
   check_ajax_referer('kol_rrhh_nonce', 'nonce');
+  $this->ajax_require_plugin_access();
 
   global $wpdb;
 
@@ -1272,6 +1299,7 @@ foreach (['banda_horas_id','hora_banda_id','horas_banda_id','banda_id','id_banda
 
 public function ajax_get_comision(){
   check_ajax_referer('kol_rrhh_nonce', 'nonce');
+  $this->ajax_require_plugin_access();
 
   global $wpdb;
 
@@ -1388,9 +1416,7 @@ public function ajax_save_desempeno_item(){
   if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
     wp_send_json_error(['message' => 'Nonce inválido']);
   }
-  if (!is_user_logged_in()) {
-    wp_send_json_error(['message' => 'No autorizado']);
-  }
+  $this->ajax_require_plugin_access();
 
   $legajo = isset($_POST['legajo']) ? intval($_POST['legajo']) : 0;
   $mes = isset($_POST['mes']) ? sanitize_text_field($_POST['mes']) : '';
@@ -1480,9 +1506,7 @@ public function ajax_delete_desempeno_item(){
   if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
     wp_send_json_error(['message' => 'Nonce inválido']);
   }
-  if (!is_user_logged_in()) {
-    wp_send_json_error(['message' => 'No autorizado']);
-  }
+  $this->ajax_require_plugin_access();
 
   $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
   if ($id <= 0) wp_send_json_error(['message' => 'ID inválido']);
@@ -1507,9 +1531,7 @@ public function ajax_delete_sueldo_item(){
   if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
     wp_send_json_error(['message' => 'Nonce inválido']);
   }
-  if (!is_user_logged_in()) {
-    wp_send_json_error(['message' => 'No autorizado']);
-  }
+  $this->ajax_require_plugin_access();
 
   $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
   if ($id <= 0) wp_send_json_error(['message' => 'ID inválido']);
@@ -1544,9 +1566,7 @@ public function ajax_save_sueldo_item(){
   if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
     wp_send_json_error(['message' => 'Nonce inválido']);
   }
-  if (!is_user_logged_in()) {
-    wp_send_json_error(['message' => 'No autorizado']);
-  }
+  $this->ajax_require_plugin_access();
 
   $inicio = sanitize_text_field($_POST['periodo_inicio'] ?? '');
 $fin    = sanitize_text_field($_POST['periodo_fin'] ?? '');
@@ -1710,10 +1730,7 @@ public function ajax_save_employee(){
   if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
     wp_send_json_error(['message' => 'Nonce inválido']);
   }
-
-  if (!is_user_logged_in()) {
-    wp_send_json_error(['message' => 'No autorizado']);
-  }
+  $this->ajax_require_plugin_access();
 
   // Ajustá capability si querés (recomendado)
   // if (!current_user_can('manage_options')) wp_send_json_error(['message' => 'Sin permisos']);
@@ -2022,6 +2039,7 @@ $clover_employee_id = preg_replace('/\s*,\s*/', ',', $clover_employee_id);
     if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
       wp_send_json_error(['message' => 'Nonce inválido']);
     }
+    $this->ajax_require_plugin_access();
 
 // Leer Clover ID del empleado seleccionado (formato: MerchantID;EmployeeID)
 $legajo = isset($_POST['legajo']) ? intval($_POST['legajo']) : 0;
@@ -2336,7 +2354,7 @@ $dayKey = $this->fmt_day_key($inDt);
   if (!isset($_GET['nonce']) || !wp_verify_nonce($_GET['nonce'], 'kol_rrhh_nonce')) {
     wp_die('Nonce inválido');
   }
-  if (!is_user_logged_in()) wp_die('No autorizado');
+  if (!$this->has_plugin_access()) wp_die('No tenés acceso a este módulo. Solicitá acceso a administración.');
 
   $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
   if ($id <= 0) wp_die('ID inválido');
