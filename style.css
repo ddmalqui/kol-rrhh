@@ -688,7 +688,8 @@
   font-size:12px;
   line-height:1.2;
   box-shadow:0 10px 25px rgba(0,0,0,.2);
-  white-space:nowrap;
+  white-space:normal;
+  max-width:260px;
 }
 .kolrrhh-popover::after{
   content:'';
@@ -700,6 +701,21 @@
   border-color:transparent transparent #111 transparent;
 }
 .kolrrhh-popover.is-open{ display:block; }
+
+/* Keep popovers visible and inside the sueldo modal edges */
+#kolrrhh-sueldo-modal .kolrrhh-modal-card{ overflow:visible; }
+#kolrrhh-desempeno-personal-popover,
+#kolrrhh-rendimiento-popover,
+#kolrrhh-no-rem-popover{
+  left:auto;
+  right:0;
+}
+#kolrrhh-desempeno-personal-popover::after,
+#kolrrhh-rendimiento-popover::after,
+#kolrrhh-no-rem-popover::after{
+  left:auto;
+  right:10px;
+}
 
 .kolrrhh-modal-input{
   width:100%;
