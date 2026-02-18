@@ -1325,7 +1325,11 @@ function refreshNoRemFromState(){
     return;
   }
 
-  const noRem = __CURRENT_BASE__ * NO_REMUNERATIVO_FACTOR;
+  const diasRaw = String(getVal('kolrrhh-sueldo-dias-trabajo') || '').trim();
+  const diasNormalizado = diasRaw.replace(',', '.');
+  const diasTrabajados = diasNormalizado ? parseFloat(diasNormalizado) : 0;
+  const proporcionDias = Math.max(0, isFinite(diasTrabajados) ? diasTrabajados : 0) / 26;
+  const noRem = (Number(__CURRENT_BASE__ || 0) * NO_REMUNERATIVO_FACTOR) + (proporcionDias * 100000);
   setText(
     'kolrrhh-sueldo-no-rem',
     (typeof moneyAR === 'function') ? moneyAR(noRem) : ('$' + noRem.toFixed(2))

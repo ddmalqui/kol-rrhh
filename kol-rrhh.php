@@ -728,7 +728,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
             </button>
           </div>
           <div id="kolrrhh-no-rem-popover" class="kolrrhh-popover" role="tooltip" aria-hidden="true">
-            No remunerativo = base × 0,6.
+            No remunerativo = base x 0,6 + ((dias trabajados / 26) x 100000).
           </div>
           <div id="kolrrhh-sueldo-no-rem" class="kolrrhh-modal-input kolrrhh-modal-value">$0</div>
         </div>
