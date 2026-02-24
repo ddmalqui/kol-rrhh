@@ -99,7 +99,7 @@ const NO_REMUNERATIVO_FACTOR = 0.6;
   function renderComisionFromState(){
     const participacion = getParticipacionValue();
     const area = getVal('kolrrhh-sueldo-area');
-    const factor = area === 'Dep' ? 0.005 : 0.01;
+    const factor = getComisionFactorByArea(area);
     const comisionFinal = __CURRENT_COMISION_BASE__ * factor * participacion;
     __CURRENT_COMISION__ = isFinite(comisionFinal) ? comisionFinal : 0;
     if (typeof moneyAR === 'function'){
