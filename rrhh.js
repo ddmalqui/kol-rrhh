@@ -660,6 +660,60 @@ async function loadDesempenoForLegajo(legajoNum){
     return s || '—';
   }
 
+  function getPeriodoMesKey(row){
+    const fin = String(row?.periodo_fin || '').trim();
+    const ini = String(row?.periodo_inicio || '').trim();
+    const ref = fin || ini;
+    const m = ref.match(/^(\d{4})-(\d{2})/);
+    return m ? `${m[1]}-${m[2]}` : '';
+  }
+
+  function getPeriodoMesNombre(row){
+    const key = getPeriodoMesKey(row);
+    const m = key.match(/^(\d{4})-(\d{2})$/);
+    if (!m) return 'ese mes';
+    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const mm = Math.max(1, Math.min(12, parseInt(m[2], 10)));
+    return `${meses[mm - 1]} ${m[1]}`;
+  }
+
+  function askSueldoPrintScope(monthLabel){
+    return new Promise(resolve => {
+      const modal = document.createElement('div');
+      modal.className = 'kolrrhh-modal is-open';
+      modal.setAttribute('aria-hidden', 'false');
+      modal.innerHTML = `
+        <div class="kolrrhh-modal-backdrop" data-kolrrhh-print-close="1"></div>
+        <div class="kolrrhh-modal-card" role="dialog" aria-modal="true" aria-labelledby="kolrrhh-print-scope-title">
+          <div class="kolrrhh-modal-h">
+            <div class="kolrrhh-modal-title" id="kolrrhh-print-scope-title">Generar PDF</div>
+            <button type="button" class="kolrrhh-modal-x" data-kolrrhh-print-close="1" aria-label="Cerrar">×</button>
+          </div>
+          <div class="kolrrhh-modal-b">
+            <p style="margin:0;">${escapeHtml(`¿Generar el detalle de cada item del mes de ${monthLabel}?`)}</p>
+          </div>
+          <div class="kolrrhh-modal-actions">
+            <button type="button" class="kolrrhh-btn" data-kolrrhh-print-one="1">No, solo este</button>
+            <button type="button" class="kolrrhh-btn kolrrhh-btn-primary" data-kolrrhh-print-all="1">Si generar todos</button>
+          </div>
+        </div>
+      `;
+
+      const close = (result) => {
+        modal.remove();
+        resolve(result);
+      };
+
+      modal.addEventListener('click', (ev) => {
+        if (ev.target.closest('[data-kolrrhh-print-all="1"]')) return close('all');
+        if (ev.target.closest('[data-kolrrhh-print-one="1"]')) return close('one');
+        if (ev.target.closest('[data-kolrrhh-print-close="1"]')) return close('one');
+      });
+
+      document.body.appendChild(modal);
+    });
+  }
+
   function parseInasistencias(val){
     if (val === null || val === undefined || val === '') return [];
     if (Array.isArray(val)) return val;
@@ -2643,7 +2697,7 @@ if (finSel) finSel.addEventListener('change', () => {
     // === SUELDO: botón Agregar y Editar en cards ===
     const sueldoHost = qs('kolrrhh-sueldo-items');
 
-    document.addEventListener('click', function(ev){
+    document.addEventListener('click', async function(ev){
       // Agregar nuevo item
       const add = ev.target.closest('#kolrrhh-sueldo-add');
       if (add) {
@@ -2684,7 +2738,26 @@ if (finSel) finSel.addEventListener('change', () => {
         const id = Number(print.getAttribute('data-id') || 0);
         if (!id) return;
 
-        const url = `${KOL_RRHH.ajaxurl}?action=kol_rrhh_print_sueldo_item&nonce=${encodeURIComponent(KOL_RRHH.nonce)}&id=${id}`;
+        const rows = (__LAST_SUELDO_ROWS__ || []);
+        const current = rows.find(x => Number(x.id) === id);
+        if (!current) return;
+
+        const mesKey = getPeriodoMesKey(current);
+        const monthRows = mesKey ? rows.filter(x => getPeriodoMesKey(x) === mesKey) : [current];
+        const monthLabel = getPeriodoMesNombre(current);
+
+        let idsToPrint = [id];
+        const choice = await askSueldoPrintScope(monthLabel);
+        if (choice === 'all') {
+          idsToPrint = monthRows
+            .map(x => Number(x.id))
+            .filter(n => Number.isFinite(n) && n > 0);
+        }
+
+        const idsQuery = idsToPrint.length > 1
+          ? `&ids=${encodeURIComponent(idsToPrint.join(','))}`
+          : `&id=${id}`;
+        const url = `${KOL_RRHH.ajaxurl}?action=kol_rrhh_print_sueldo_item&nonce=${encodeURIComponent(KOL_RRHH.nonce)}${idsQuery}`;
         window.open(url, '_blank');
         return;
       }

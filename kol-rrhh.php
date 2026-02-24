@@ -9,7 +9,7 @@
 if (!defined('ABSPATH')) exit;
 
 final class KOL_RRHH_Plugin {
-  const VERSION = '1.0.3';
+  const VERSION = '1.0.4';
   const SHORTCODE = 'kol_rrhh';
 
   public function __construct(){
@@ -2365,66 +2365,93 @@ $dayKey = $this->fmt_day_key($inDt);
   }
   if (!$this->has_plugin_access()) wp_die('No tenés acceso a este módulo. Solicitá acceso a administración.');
 
-  $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
-  if ($id <= 0) wp_die('ID inválido');
+  $ids = [];
+  if (isset($_GET['ids'])) {
+    $rawIds = explode(',', (string)$_GET['ids']);
+    foreach ($rawIds as $raw) {
+      $n = intval($raw);
+      if ($n > 0) $ids[] = $n;
+    }
+  }
+  if (empty($ids) && isset($_GET['id'])) {
+    $one = intval($_GET['id']);
+    if ($one > 0) $ids[] = $one;
+  }
+  $ids = array_values(array_unique($ids));
+  if (empty($ids)) wp_die('ID inválido');
 
   global $wpdb;
   $table = $this->sueldos_items_table();
 
-  $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id=%d", $id), ARRAY_A);
-  if (!$row) wp_die('Item no encontrado');
+  $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+  $sql = "SELECT * FROM {$table} WHERE id IN ({$placeholders}) ORDER BY periodo_inicio ASC, periodo_fin ASC, id ASC";
+  $rows = $wpdb->get_results($wpdb->prepare($sql, ...$ids), ARRAY_A);
+  if (!$rows || !is_array($rows)) wp_die('Item no encontrado');
 
-  // Buscar datos básicos del empleado por legajo (ajustá si tu tabla tiene otro nombre)
-  $emp = $wpdb->get_row($wpdb->prepare(
-    "SELECT nombre, legajo, dni, cuil FROM {$this->table_name()} WHERE legajo=%d LIMIT 1",
-    intval($row['legajo'])
-  ), ARRAY_A);
+  $legajos = [];
+  foreach ($rows as $r) {
+    $l = intval($r['legajo'] ?? 0);
+    if ($l > 0) $legajos[] = $l;
+  }
+  $legajos = array_values(array_unique($legajos));
 
-  $nombre = $emp['nombre'] ?? '—';
-  $legajo = $emp['legajo'] ?? ($row['legajo'] ?? '—');
+  $empByLegajo = [];
+  if (!empty($legajos)) {
+    $ph = implode(',', array_fill(0, count($legajos), '%d'));
+    $sqlEmp = "SELECT nombre, legajo FROM {$this->table_name()} WHERE legajo IN ({$ph})";
+    $emps = $wpdb->get_results($wpdb->prepare($sqlEmp, ...$legajos), ARRAY_A) ?: [];
+    foreach ($emps as $e) {
+      $k = intval($e['legajo'] ?? 0);
+      if ($k > 0) $empByLegajo[$k] = $e;
+    }
+  }
 
-  // helpers
-  $fmt = function($n){
-    $n = (float)$n;
-    return '$' . number_format($n, 0, ',', '.'); // sin centavos para que quede como tus pantallas
-  };
+  $items = [];
+  foreach ($rows as $row) {
+    $legajoNum = intval($row['legajo'] ?? 0);
+    $emp = $empByLegajo[$legajoNum] ?? [];
 
-  $periodo_inicio = $row['periodo_inicio'] ?? '';
-  $periodo_fin    = $row['periodo_fin'] ?? '';
-  $mes_label = $periodo_inicio ? strtoupper(date_i18n('F Y', strtotime($periodo_inicio))) : strtoupper(date_i18n('F Y'));
+    $periodo_inicio = $row['periodo_inicio'] ?? '';
+    $periodo_fin    = $row['periodo_fin'] ?? '';
+    $mes_label = $periodo_inicio ? strtoupper(date_i18n('F Y', strtotime($periodo_inicio))) : strtoupper(date_i18n('F Y'));
 
-  $efectivo = (float)($row['efectivo'] ?? 0);
-  $transfer = (float)($row['transferencia'] ?? 0);
-  $creditos = (float)($row['creditos'] ?? 0);
+    $efectivo = (float)($row['efectivo'] ?? 0);
+    $transfer = (float)($row['transferencia'] ?? 0);
+    $creditos = (float)($row['creditos'] ?? 0);
+    $total_pago = $efectivo + $transfer + $creditos;
 
-  $total_pago = $efectivo + $transfer + $creditos;
+    $items[] = [
+      'nombre' => $emp['nombre'] ?? '—',
+      'legajo' => $emp['legajo'] ?? ($row['legajo'] ?? '—'),
+      'mes_label' => $mes_label,
+      'periodo_inicio' => $periodo_inicio,
+      'periodo_fin' => $periodo_fin,
+      'rol' => $row['rol'] ?? '',
+      'area' => $row['area'] ?? '',
+      'efectivo' => $efectivo,
+      'transferencia' => $transfer,
+      'creditos' => $creditos,
+      'total_pago' => $total_pago,
+      'row' => $row,
+    ];
+  }
 
   header('Content-Type: text/html; charset=UTF-8');
-
-  echo $this->render_print_html([
-    'nombre' => $nombre,
-    'legajo' => $legajo,
-    'mes_label' => $mes_label,
-    'periodo_inicio' => $periodo_inicio,
-    'periodo_fin' => $periodo_fin,
-    'rol' => $row['rol'] ?? '',
-    'area' => $row['area'] ?? '',
-    'efectivo' => $efectivo,
-    'transferencia' => $transfer,
-    'creditos' => $creditos,
-    'total_pago' => $total_pago,
-    'fmt' => $fmt,
-    'row' => $row,
-  ]);
-
+  echo $this->render_print_html($items);
   exit;
 }
 
-private function render_print_html($d){
-  $fmt = $d['fmt'];
-  $row = $d['row'];
+private function render_print_html($items){
+  $items = is_array($items) ? $items : [];
+  if (empty($items)) return '';
 
-  // Solo mostramos filas si hay dato (para tu idea “lo que no tengo no lo coloco”)
+  $fmt = function($n){
+    $n = (float)$n;
+    return '$' . number_format($n, 0, ',', '.');
+  };
+  $titleName = $items[0]['nombre'] ?? 'Recibo';
+  $titleMonth = $items[0]['mes_label'] ?? '';
+
   $maybeRow = function($label, $value) use ($fmt){
     if ($value === null || $value === '' || (is_numeric($value) && (float)$value == 0)) return '';
     $v = is_numeric($value) ? $fmt($value) : esc_html($value);
@@ -2436,12 +2463,13 @@ private function render_print_html($d){
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <title>Recibo <?php echo esc_html($d['nombre']); ?> - <?php echo esc_html($d['mes_label']); ?></title>
+  <title>Recibo <?php echo esc_html($titleName); ?> - <?php echo esc_html($titleMonth); ?></title>
   <style>
     /* ====== Print setup ====== */
     @page { size: A4; margin: 14mm; }
     body { font-family: Arial, Helvetica, sans-serif; color:#111; font-size: 12px; }
     .sheet { max-width: 780px; margin: 0 auto; }
+    .print-item + .print-item { page-break-before: always; break-before: page; }
     .top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; border-bottom:1px solid #ddd; padding-bottom:12px; margin-bottom:14px; }
     .brand { font-weight: 800; font-size: 14px; letter-spacing:.02em; }
     .muted { color:#555; }
@@ -2470,13 +2498,12 @@ private function render_print_html($d){
   </style>
 </head>
 <body>
-  <div class="sheet page">
   <div class="sheet">
-
     <div class="printbar">
       <button class="btn" onclick="window.print()">Imprimir / Guardar PDF</button>
     </div>
-
+    <?php foreach ($items as $d): $row = $d['row']; ?>
+    <div class="print-item">
     <div class="top">
       <div>
         <div class="brand">KOL ACCESORIOS</div>
@@ -2550,9 +2577,9 @@ private function render_print_html($d){
       <div class="line">Firma Empleado</div>
       <div class="line">Firma Empleador</div>
     </div>
-
+    </div>
+    <?php endforeach; ?>
   </div>
-      </div>
 </body>
 </html>
 <?php
