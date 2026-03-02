@@ -9,7 +9,7 @@
 if (!defined('ABSPATH')) exit;
 
 final class KOL_RRHH_Plugin {
-  const VERSION = '1.0.5';
+  const VERSION = '1.0.6';
   const SHORTCODE = 'kol_rrhh';
 
   public function __construct(){
@@ -17,6 +17,7 @@ final class KOL_RRHH_Plugin {
     add_action('admin_enqueue_scripts', [$this,'register_assets']);
     add_action('wp_ajax_kol_rrhh_save_employee', [$this,'ajax_save_employee']);
     add_action('wp_ajax_kol_rrhh_get_sueldo_items', [$this,'ajax_get_sueldo_items']);
+    add_action('wp_ajax_kol_rrhh_get_historial_resumen', [$this,'ajax_get_historial_resumen']);
     add_action('wp_ajax_kol_rrhh_save_sueldo_item', [$this,'ajax_save_sueldo_item']);
     add_action('wp_ajax_kol_rrhh_delete_sueldo_item', [$this,'ajax_delete_sueldo_item']);
     add_action('wp_ajax_kol_rrhh_get_desempeno_items', [$this,'ajax_get_desempeno_items']);
@@ -977,6 +978,95 @@ public function ajax_get_sueldo_items(){
   );
 
   wp_send_json_success(['rows' => $rows ?: []]);
+}
+
+public function ajax_get_historial_resumen(){
+  if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
+    wp_send_json_error(['message' => 'Nonce inválido']);
+  }
+  $this->ajax_require_plugin_access();
+
+  $year = isset($_POST['year']) ? intval($_POST['year']) : 2026;
+  if ($year < 2000 || $year > 2100) $year = 2026;
+
+  global $wpdb;
+  $empTable = $this->table_name();
+  $sueldoTable = $this->sueldos_items_table();
+
+  $empExists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $empTable));
+  if ($empExists !== $empTable) {
+    wp_send_json_success(['rows' => []]);
+  }
+
+  $employees = $wpdb->get_results(
+    "SELECT nombre, legajo, estado
+     FROM {$empTable}
+     ORDER BY
+       CASE WHEN UPPER(estado)='ACTIVO' THEN 0 ELSE 1 END ASC,
+       CAST(legajo AS UNSIGNED) ASC,
+       id ASC",
+    ARRAY_A
+  ) ?: [];
+
+  $rows = [];
+  $indexByLegajo = [];
+
+  foreach ($employees as $e) {
+    $legajoNum = intval(preg_replace('/\D+/', '', (string)($e['legajo'] ?? '')));
+    $key = $legajoNum > 0 ? (string)$legajoNum : trim((string)($e['legajo'] ?? ''));
+    if ($key === '') continue;
+
+    $indexByLegajo[$key] = count($rows);
+    $legajoDisplay = $legajoNum > 0
+      ? str_pad((string)$legajoNum, 4, '0', STR_PAD_LEFT)
+      : (string)($e['legajo'] ?? '—');
+    $rows[] = [
+      'nombre' => (string)($e['nombre'] ?? '—'),
+      'legajo' => $legajoDisplay,
+      'estado' => (string)($e['estado'] ?? ''),
+      'months' => [],
+    ];
+  }
+
+  $sueldoExists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $sueldoTable));
+  if ($sueldoExists !== $sueldoTable) {
+    wp_send_json_success(['rows' => $rows]);
+  }
+
+  $yearPrefix = $year . '-';
+  $totals = $wpdb->get_results(
+    $wpdb->prepare(
+      "SELECT
+        CAST(legajo AS UNSIGNED) AS legajo_num,
+        DATE_FORMAT(
+          COALESCE(NULLIF(periodo_fin, ''), periodo_inicio),
+          '%%Y-%%m'
+        ) AS ym,
+        SUM(COALESCE(efectivo,0) + COALESCE(transferencia,0) + COALESCE(creditos,0)) AS total
+      FROM {$sueldoTable}
+      WHERE
+        (periodo_inicio LIKE %s OR periodo_fin LIKE %s)
+      GROUP BY legajo_num, ym",
+      $yearPrefix . '%',
+      $yearPrefix . '%'
+    ),
+    ARRAY_A
+  ) ?: [];
+
+  foreach ($totals as $t) {
+    $legajoNum = intval($t['legajo_num'] ?? 0);
+    if ($legajoNum <= 0) continue;
+
+    $key = (string)$legajoNum;
+    if (!isset($indexByLegajo[$key])) continue;
+
+    $ym = trim((string)($t['ym'] ?? ''));
+    if (!preg_match('/^\d{4}-\d{2}$/', $ym)) continue;
+
+    $rows[$indexByLegajo[$key]]['months'][$ym] = (float)($t['total'] ?? 0);
+  }
+
+  wp_send_json_success(['rows' => $rows]);
 }
 
 

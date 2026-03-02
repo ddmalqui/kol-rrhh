@@ -2144,72 +2144,110 @@ async function refreshDesempenoPersonalDesempeno(){
       ];
     }
 
-    function collectEmployeesForHistory(){
-      const parseEmpFromBtn = (btn) => {
-        const payload = btn?.getAttribute('data-emp') || '';
-        const emp = safeJsonParse(payload) || {};
-        const nombre = String(emp?.nombre || '').trim() || 'â€”';
-        const legajoNum = toIntLegajo(emp?.legajo);
-        const legajo = legajoNum ? formatLegajo4(legajoNum) : 'â€”';
-        return { nombre, legajo };
-      };
+    function loadHistoryResumen(year){
+  const fd = new FormData();
+  fd.append('action', 'kol_rrhh_get_historial_resumen');
+  fd.append('nonce', AJAX_NONCE);
+  fd.append('year', String(year || 2026));
 
-      const activos = Array.from(document.querySelectorAll('#kolrrhh-list-activos .kolrrhh-item')).map(parseEmpFromBtn);
-      const otros = Array.from(document.querySelectorAll('#kolrrhh-list-otros .kolrrhh-item')).map(parseEmpFromBtn);
-      return [...activos, ...otros];
+  return fetch(AJAX_URL, {
+    method: 'POST',
+    body: fd,
+    credentials: 'same-origin'
+  })
+  .then(r => r.json())
+  .then(json => {
+    if (!json || json.success !== true) {
+      throw new Error(json?.data?.message || 'No se pudo cargar el historial');
     }
+    return Array.isArray(json?.data?.rows) ? json.data.rows : [];
+  });
+}
 
-    function renderHistoryPanel(){
-      const el = qs('kolrrhh-detail');
-      if (!el) return;
+function formatHistoryMoney(v){
+  const n = Number(v || 0);
+  if (!Number.isFinite(n) || n <= 0) return '—';
+  return (typeof moneyAR === 'function') ? moneyAR(n) : ('$' + n.toFixed(2));
+}
 
-      const months = getHistoryMonths2026();
-      const employees = collectEmployeesForHistory();
+function buildHistoryRowsHtml(rows, months){
+  if (!rows || !rows.length) {
+    return `
+      <tr>
+        <td class="kolrrhh-history-empty" colspan="${months.length + 1}">No hay personal cargado.</td>
+      </tr>
+    `;
+  }
 
-      const tableHeadMonths = months.map(m => `<th>${escapeHtml(m.label)}</th>`).join('');
-      const tableRows = employees.length
-        ? employees.map(emp => `
-          <tr>
-            <td class="kolrrhh-history-person-col">
-              <div class="kolrrhh-history-person-name">${escapeHtml(emp.nombre)}</div>
-              <div class="kolrrhh-history-person-sub">Legajo ${escapeHtml(emp.legajo)}</div>
-            </td>
-            ${months.map(() => `<td class="kolrrhh-history-cell">â€”</td>`).join('')}
-          </tr>
-        `).join('')
-        : `
-          <tr>
-            <td class="kolrrhh-history-empty" colspan="${months.length + 1}">No hay personal cargado.</td>
-          </tr>
-        `;
+  return rows.map(emp => {
+    const monthMap = (emp && typeof emp.months === 'object' && emp.months) ? emp.months : {};
+    const nombre = String(emp?.nombre || '—');
+    const legajo = String(emp?.legajo || '—');
+    const tds = months
+      .map(m => `<td class="kolrrhh-history-cell">${escapeHtml(formatHistoryMoney(monthMap[m.key]))}</td>`)
+      .join('');
 
-      el.innerHTML = `
-        <div class="kolrrhh-locales-head">
-          <div>
-            <div class="kolrrhh-locales-title">HISTORIAL DE COBROS</div>
-            <div class="kolrrhh-locales-sub">Resumen mensual 2026</div>
-          </div>
-          <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary kolrrhh-btn-small" id="kolrrhh-history-back">Volver</button>
-        </div>
-        <div class="kolrrhh-locales-body">
-          <div class="kolrrhh-tablewrap kolrrhh-history-wrap">
-            <table class="kolrrhh-table kolrrhh-history-table">
-              <thead>
-                <tr>
-                  <th>Personal</th>
-                  ${tableHeadMonths}
-                </tr>
-              </thead>
-              <tbody>
-                ${tableRows}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      `;
-    }
+    return `
+      <tr>
+        <td class="kolrrhh-history-person-col">
+          <div class="kolrrhh-history-person-name">${escapeHtml(nombre)}</div>
+          <div class="kolrrhh-history-person-sub">Legajo ${escapeHtml(legajo)}</div>
+        </td>
+        ${tds}
+      </tr>
+    `;
+  }).join('');
+}
 
-      function normalizeMesLabel(value){
+function renderHistoryPanel(){
+  const el = qs('kolrrhh-detail');
+  if (!el) return;
+
+  const months = getHistoryMonths2026();
+  const tableHeadMonths = months.map(m => `<th>${escapeHtml(m.label)}</th>`).join('');
+
+  el.innerHTML = `
+    <div class="kolrrhh-locales-head">
+      <div>
+        <div class="kolrrhh-locales-title">HISTORIAL DE COBROS</div>
+        <div class="kolrrhh-locales-sub">Resumen mensual 2026</div>
+      </div>
+      <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary kolrrhh-btn-small" id="kolrrhh-history-back">Volver</button>
+    </div>
+    <div class="kolrrhh-locales-body">
+      <div class="kolrrhh-tablewrap kolrrhh-history-wrap">
+        <table class="kolrrhh-table kolrrhh-history-table">
+          <thead>
+            <tr>
+              <th>Personal</th>
+              ${tableHeadMonths}
+            </tr>
+          </thead>
+          <tbody id="kolrrhh-history-body">
+            <tr>
+              <td class="kolrrhh-history-empty" colspan="${months.length + 1}">Cargando historial...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  loadHistoryResumen(2026)
+    .then(rows => {
+      if (__VIEW_MODE__ !== 'history') return;
+      const body = qs('kolrrhh-history-body');
+      if (!body) return;
+      body.innerHTML = buildHistoryRowsHtml(rows, months);
+    })
+    .catch(err => {
+      if (__VIEW_MODE__ !== 'history') return;
+      const body = qs('kolrrhh-history-body');
+      if (!body) return;
+      body.innerHTML = `<tr><td class="kolrrhh-history-empty" colspan="${months.length + 1}">${escapeHtml(String(err?.message || 'Error al cargar historial.'))}</td></tr>`;
+    });
+}
+function normalizeMesLabel(value){
       const raw = String(value ?? '').trim();
       if (!raw) return '';
       if (/^\d{4}-\d{2}/.test(raw)) {
@@ -3113,3 +3151,4 @@ idsInputsSueldo.forEach(id => {
     }
 });
 })();
+
