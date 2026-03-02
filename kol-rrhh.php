@@ -9,7 +9,7 @@
 if (!defined('ABSPATH')) exit;
 
 final class KOL_RRHH_Plugin {
-  const VERSION = '1.0.4';
+  const VERSION = '1.0.5';
   const SHORTCODE = 'kol_rrhh';
 
   public function __construct(){
@@ -231,6 +231,13 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
             </div>
             <div class="kolrrhh-top-actions">
               <div class="kolrrhh-badge kolrrhh-badge-green" title="Activos"><?php echo esc_html(count($activos)); ?></div>
+              <button type="button" class="kolrrhh-badge kolrrhh-history-btn" id="kolrrhh-open-history" title="Ver historial" aria-label="Ver historial">
+                <svg class="kolrrhh-history-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M3 4v5h5"></path>
+                  <path d="M4.8 11a8 8 0 1 1 2.4 6.3"></path>
+                  <path d="M12 8v4l3 2"></path>
+                </svg>
+              </button>
               <button type="button" class="kolrrhh-badge kolrrhh-store-btn" id="kolrrhh-open-locales" title="Ver locales" aria-label="Ver locales">
                 <svg class="kolrrhh-store-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <path d="M3 10h18v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V10z"></path>

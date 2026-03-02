@@ -13,7 +13,7 @@
   let __CURRENT_LEGAJO__ = 0;
   let __CURRENT_CLOVER_ID__ = '';
   let __CURRENT_CLOVER_PAIRS__ = [];
-  let __VIEW_MODE__ = 'employees'; // employees | locales
+  let __VIEW_MODE__ = 'employees'; // employees | locales | history
   let __CURRENT_ULTIMO_INGRESO__ = '';
   let __CURRENT_VINCULO_ANTIG__ = '';
   let __CURRENT_BASE__ = 0;
@@ -1945,9 +1945,9 @@ async function refreshDesempenoPersonalDesempeno(){
     // Click on employee item => render detail
     const btn = e.target.closest('.kolrrhh-item');
     if (btn) {
-      // ✅ Si estamos en la vista "Locales", al seleccionar un empleado volvemos
+      // Si estamos en una vista alternativa, al seleccionar un empleado volvemos
       // automáticamente a la vista normal (tabs + panes).
-      if (__VIEW_MODE__ === 'locales') {
+      if (__VIEW_MODE__ !== 'employees') {
         __VIEW_MODE__ = 'employees';
         const tabs = document.querySelector('.kolrrhh-tabs');
         const panes = document.querySelector('.kolrrhh-tabpanes');
@@ -2071,6 +2071,7 @@ async function refreshDesempenoPersonalDesempeno(){
 
     // === LOCALES: botón en el header izquierdo ===
     const localesBtn = qs('kolrrhh-open-locales');
+    const historyBtn = qs('kolrrhh-open-history');
 
     function toggleTabs(show){
       const tabs = document.querySelector('.kolrrhh-tabs');
@@ -2125,6 +2126,88 @@ async function refreshDesempenoPersonalDesempeno(){
 
       loadRendimientoLocales();
       }
+
+    function getHistoryMonths2026(){
+      return [
+        { key: '2026-01', label: 'Enero' },
+        { key: '2026-02', label: 'Febrero' },
+        { key: '2026-03', label: 'Marzo' },
+        { key: '2026-04', label: 'Abril' },
+        { key: '2026-05', label: 'Mayo' },
+        { key: '2026-06', label: 'Junio' },
+        { key: '2026-07', label: 'Julio' },
+        { key: '2026-08', label: 'Agosto' },
+        { key: '2026-09', label: 'Septiembre' },
+        { key: '2026-10', label: 'Octubre' },
+        { key: '2026-11', label: 'Noviembre' },
+        { key: '2026-12', label: 'Diciembre' }
+      ];
+    }
+
+    function collectEmployeesForHistory(){
+      const parseEmpFromBtn = (btn) => {
+        const payload = btn?.getAttribute('data-emp') || '';
+        const emp = safeJsonParse(payload) || {};
+        const nombre = String(emp?.nombre || '').trim() || '—';
+        const legajoNum = toIntLegajo(emp?.legajo);
+        const legajo = legajoNum ? formatLegajo4(legajoNum) : '—';
+        return { nombre, legajo };
+      };
+
+      const activos = Array.from(document.querySelectorAll('#kolrrhh-list-activos .kolrrhh-item')).map(parseEmpFromBtn);
+      const otros = Array.from(document.querySelectorAll('#kolrrhh-list-otros .kolrrhh-item')).map(parseEmpFromBtn);
+      return [...activos, ...otros];
+    }
+
+    function renderHistoryPanel(){
+      const el = qs('kolrrhh-detail');
+      if (!el) return;
+
+      const months = getHistoryMonths2026();
+      const employees = collectEmployeesForHistory();
+
+      const tableHeadMonths = months.map(m => `<th>${escapeHtml(m.label)}</th>`).join('');
+      const tableRows = employees.length
+        ? employees.map(emp => `
+          <tr>
+            <td class="kolrrhh-history-person-col">
+              <div class="kolrrhh-history-person-name">${escapeHtml(emp.nombre)}</div>
+              <div class="kolrrhh-history-person-sub">Legajo ${escapeHtml(emp.legajo)}</div>
+            </td>
+            ${months.map(() => `<td class="kolrrhh-history-cell">—</td>`).join('')}
+          </tr>
+        `).join('')
+        : `
+          <tr>
+            <td class="kolrrhh-history-empty" colspan="${months.length + 1}">No hay personal cargado.</td>
+          </tr>
+        `;
+
+      el.innerHTML = `
+        <div class="kolrrhh-locales-head">
+          <div>
+            <div class="kolrrhh-locales-title">HISTORIAL DE COBROS</div>
+            <div class="kolrrhh-locales-sub">Resumen mensual 2026</div>
+          </div>
+          <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary kolrrhh-btn-small" id="kolrrhh-history-back">Volver</button>
+        </div>
+        <div class="kolrrhh-locales-body">
+          <div class="kolrrhh-tablewrap kolrrhh-history-wrap">
+            <table class="kolrrhh-table kolrrhh-history-table">
+              <thead>
+                <tr>
+                  <th>Personal</th>
+                  ${tableHeadMonths}
+                </tr>
+              </thead>
+              <tbody>
+                ${tableRows}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
 
       function normalizeMesLabel(value){
       const raw = String(value ?? '').trim();
@@ -2327,9 +2410,29 @@ async function refreshDesempenoPersonalDesempeno(){
       });
     }
 
+    if (historyBtn) {
+      historyBtn.addEventListener('click', function(ev){
+        ev.preventDefault();
+        __VIEW_MODE__ = 'history';
+        clearEmployeeSelection();
+        toggleTabs(false);
+        renderHistoryPanel();
+      });
+    }
+
     // Volver desde el panel de locales
     document.addEventListener('click', function(ev){
       const back = ev.target.closest('#kolrrhh-locales-back');
+      if (!back) return;
+      ev.preventDefault();
+      __VIEW_MODE__ = 'employees';
+      toggleTabs(true);
+      renderEmptyDetail();
+    });
+
+    // Volver desde el panel de historial
+    document.addEventListener('click', function(ev){
+      const back = ev.target.closest('#kolrrhh-history-back');
       if (!back) return;
       ev.preventDefault();
       __VIEW_MODE__ = 'employees';
