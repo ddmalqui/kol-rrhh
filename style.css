@@ -1320,41 +1320,60 @@
 /* ===== Historial de cobros ===== */
 .kolrrhh-history-wrap{
   overflow-x: auto;
+  border: 1px solid #a7b8dc;
+  border-radius: 0;
+  background: #fff;
 }
 .kolrrhh-history-table{
   min-width: 980px;
+  border-collapse: collapse;
 }
 .kolrrhh-history-table th,
 .kolrrhh-history-table td{
   text-align: center;
   vertical-align: middle;
+  border: 1px solid #a7b8dc;
+  padding: 10px 8px;
+}
+.kolrrhh-history-table thead th{
+  background: #3f6fbd;
+  color: #fff;
+  font-weight: 900;
+  letter-spacing: .01em;
+}
+.kolrrhh-history-table tbody tr:nth-child(odd) td{
+  background: #c9d5e8;
+}
+.kolrrhh-history-table tbody tr:nth-child(even) td{
+  background: #e4ebf7;
 }
 .kolrrhh-history-table th:first-child,
 .kolrrhh-history-table td:first-child{
   text-align: left;
-  min-width: 220px;
+  min-width: 240px;
 }
 .kolrrhh-history-person-col{
   line-height: 1.2;
 }
 .kolrrhh-history-person-name{
-  font-weight: 800;
-  color: #3f3f3f;
+  font-weight: 900;
+  color: #111;
 }
 .kolrrhh-history-person-sub{
   margin-top: 4px;
   font-size: 12px;
-  color: rgba(0,0,0,.62);
+  color: rgba(0,0,0,.72);
   font-weight: 700;
 }
 .kolrrhh-history-cell{
-  font-weight: 700;
-  color: rgba(0,0,0,.55);
+  font-weight: 800;
+  color: #1d2c49;
 }
 .kolrrhh-history-empty{
   text-align: center !important;
-  color: rgba(0,0,0,.6);
+  color: #2e446f;
   padding: 14px;
+  background: #e4ebf7 !important;
 }
 .kolrrhh-locales-name-cell{
   font-weight: 800;

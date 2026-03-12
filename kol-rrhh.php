@@ -9,7 +9,7 @@
 if (!defined('ABSPATH')) exit;
 
 final class KOL_RRHH_Plugin {
-  const VERSION = '1.0.6';
+  const VERSION = '1.0.7';
   const SHORTCODE = 'kol_rrhh';
 
   public function __construct(){
