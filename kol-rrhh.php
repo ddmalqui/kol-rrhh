@@ -167,6 +167,49 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
     }
   }
 
+  private function audit_log_path(){
+    return plugin_dir_path(__FILE__) . 'info.log';
+  }
+
+  private function audit_log_user_label(){
+    if (!is_user_logged_in()) {
+      return 'anon';
+    }
+
+    $user = wp_get_current_user();
+    if (!$user || empty($user->ID)) {
+      return 'anon';
+    }
+
+    $parts = [];
+    $parts[] = 'id=' . intval($user->ID);
+
+    $login = isset($user->user_login) ? trim((string)$user->user_login) : '';
+    if ($login !== '') {
+      $parts[] = 'login=' . $login;
+    }
+
+    $email = isset($user->user_email) ? trim((string)$user->user_email) : '';
+    if ($email !== '') {
+      $parts[] = 'email=' . $email;
+    }
+
+    return implode(' ', $parts);
+  }
+
+  private function audit_log($action, $table, $details = []){
+    $line = sprintf(
+      "[%s] user=\"%s\" action=\"%s\" table=\"%s\" details=%s\n",
+      current_time('mysql'),
+      $this->audit_log_user_label(),
+      sanitize_text_field((string)$action),
+      sanitize_text_field((string)$table),
+      wp_json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+    );
+
+    @file_put_contents($this->audit_log_path(), $line, FILE_APPEND | LOCK_EX);
+  }
+
   private function render_access_denied_notice(){
     return '<div class="kolrrhh-no-access">No tenés acceso a este módulo. Solicitá acceso a administración.</div>';
   }
@@ -1283,6 +1326,16 @@ public function ajax_save_desempeno_locales(){
   $formats = ['%f','%f','%f','%f','%f'];
 
   if ($exists_row) {
+    $before = [
+      'anio' => $anio,
+      'mes' => $mes,
+      'local_id' => $local_id,
+      'control_caja_pct' => $wpdb->get_var($wpdb->prepare("SELECT {$colControl} FROM {$t_desempeno} WHERE {$colAnio}=%d AND {$colMes}=%d AND {$colLocalId}=%d", $anio, $mes, $local_id)),
+      'objetivos_pct' => $wpdb->get_var($wpdb->prepare("SELECT {$colObjetivos} FROM {$t_desempeno} WHERE {$colAnio}=%d AND {$colMes}=%d AND {$colLocalId}=%d", $anio, $mes, $local_id)),
+      'compras_pct' => $wpdb->get_var($wpdb->prepare("SELECT {$colCompras} FROM {$t_desempeno} WHERE {$colAnio}=%d AND {$colMes}=%d AND {$colLocalId}=%d", $anio, $mes, $local_id)),
+      'total_pct' => $wpdb->get_var($wpdb->prepare("SELECT {$colTotal} FROM {$t_desempeno} WHERE {$colAnio}=%d AND {$colMes}=%d AND {$colLocalId}=%d", $anio, $mes, $local_id)),
+      'comision_coef' => $wpdb->get_var($wpdb->prepare("SELECT {$colComision} FROM {$t_desempeno} WHERE {$colAnio}=%d AND {$colMes}=%d AND {$colLocalId}=%d", $anio, $mes, $local_id)),
+    ];
     $ok = $wpdb->update(
       $t_desempeno,
       $data,
@@ -1296,6 +1349,13 @@ public function ajax_save_desempeno_locales(){
     );
     if ($ok === false) {
       wp_send_json_error(['message' => 'No se pudo actualizar']);
+    }
+    if ((int)$ok > 0) {
+      $this->audit_log('update', $t_desempeno, [
+        'keys' => ['anio' => $anio, 'mes' => $mes, 'local_id' => $local_id],
+        'before' => $before,
+        'after' => array_merge(['anio' => $anio, 'mes' => $mes, 'local_id' => $local_id], $data),
+      ]);
     }
     wp_send_json_success(['updated' => 1]);
   }
@@ -1314,6 +1374,10 @@ public function ajax_save_desempeno_locales(){
   if (!$ok) {
     wp_send_json_error(['message' => 'No se pudo insertar']);
   }
+
+  $this->audit_log('insert', $t_desempeno, [
+    'row' => $data_insert,
+  ]);
 
   wp_send_json_success(['created' => 1, 'id' => intval($wpdb->insert_id)]);
 }
@@ -1576,6 +1640,7 @@ public function ajax_save_desempeno_item(){
   ));
 
   if ($existing_id) {
+    $before = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", intval($existing_id)), ARRAY_A);
     $ok = $wpdb->update(
       $table,
       [
@@ -1587,6 +1652,14 @@ public function ajax_save_desempeno_item(){
       ['%d']
     );
     if ($ok === false) wp_send_json_error(['message' => 'No se pudo actualizar']);
+    $after = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", intval($existing_id)), ARRAY_A);
+    if ((int)$ok > 0) {
+      $this->audit_log('update', $table, [
+        'id' => intval($existing_id),
+        'before' => $before,
+        'after' => $after,
+      ]);
+    }
     wp_send_json_success(['id' => intval($existing_id), 'updated' => 1]);
   }
 
@@ -1605,7 +1678,13 @@ public function ajax_save_desempeno_item(){
     wp_send_json_error(['message' => 'No se pudo insertar']);
   }
 
-  wp_send_json_success(['id' => intval($wpdb->insert_id), 'created' => 1]);
+  $new_id = intval($wpdb->insert_id);
+  $this->audit_log('insert', $table, [
+    'id' => $new_id,
+    'row' => $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $new_id), ARRAY_A),
+  ]);
+
+  wp_send_json_success(['id' => $new_id, 'created' => 1]);
 }
 
 public function ajax_delete_desempeno_item(){
@@ -1625,9 +1704,16 @@ public function ajax_delete_desempeno_item(){
     wp_send_json_error(['message' => 'La tabla de desempeño no existe']);
   }
 
+  $before = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $id), ARRAY_A);
   $ok = $wpdb->delete($table, ['id' => $id], ['%d']);
   if ($ok === false) {
     wp_send_json_error(['message' => 'No se pudo eliminar']);
+  }
+  if ((int)$ok > 0) {
+    $this->audit_log('delete', $table, [
+      'id' => $id,
+      'deleted_row' => $before,
+    ]);
   }
 
   wp_send_json_success(['deleted' => 1]);
@@ -1650,6 +1736,7 @@ public function ajax_delete_sueldo_item(){
     wp_send_json_error(['message' => 'La tabla de sueldos no existe']);
   }
 
+  $before = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $id), ARRAY_A);
   $ok = $wpdb->delete($table, ['id' => $id], ['%d']);
   if ($ok === false) {
     wp_send_json_error(['message' => 'No se pudo eliminar']);
@@ -1657,6 +1744,11 @@ public function ajax_delete_sueldo_item(){
   if ((int)$ok === 0) {
     wp_send_json_error(['message' => 'El item ya no existe']);
   }
+
+  $this->audit_log('delete', $table, [
+    'id' => $id,
+    'deleted_row' => $before,
+  ]);
 
   wp_send_json_success(['deleted' => 1, 'id' => $id]);
 }
@@ -1818,15 +1910,27 @@ if (!$rol || !$area) {
 $formats = ['%d','%s','%s','%f','%s','%f','%s','%f','%s','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f'];
 
   if ($id > 0) {
+    $before = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $id), ARRAY_A);
     $ok = $wpdb->update($table, $data, ['id' => $id], $formats, ['%d']);
     if ($ok === false) wp_send_json_error(['message' => 'No se pudo actualizar']);
     $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $id), ARRAY_A);
+    if ((int)$ok > 0) {
+      $this->audit_log('update', $table, [
+        'id' => $id,
+        'before' => $before,
+        'after' => $row,
+      ]);
+    }
     wp_send_json_success(['row' => $row]);
   } else {
     $ok = $wpdb->insert($table, $data, $formats);
     if (!$ok) wp_send_json_error(['message' => 'No se pudo insertar']);
     $new_id = intval($wpdb->insert_id);
     $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $new_id), ARRAY_A);
+    $this->audit_log('insert', $table, [
+      'id' => $new_id,
+      'row' => $row,
+    ]);
     wp_send_json_success(['row' => $row]);
   }
 }
@@ -1877,6 +1981,7 @@ $clover_employee_id = preg_replace('/\s*,\s*/', ',', $clover_employee_id);
   if ($mode === 'edit') {
     if ($id <= 0) wp_send_json_error(['message' => 'ID inválido']);
 
+    $before = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id=%d", $id), ARRAY_A);
     $updated = $wpdb->update(
   $table,
   [
@@ -1905,6 +2010,13 @@ $clover_employee_id = preg_replace('/\s*,\s*/', ',', $clover_employee_id);
 
     $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id=%d", $id), ARRAY_A);
     if (!$row) wp_send_json_error(['message' => 'No encontrado']);
+    if ((int)$updated > 0) {
+      $this->audit_log('update', $table, [
+        'id' => $id,
+        'before' => $before,
+        'after' => $row,
+      ]);
+    }
 
     wp_send_json_success(['emp' => $row]);
   }
@@ -1940,6 +2052,10 @@ $clover_employee_id = preg_replace('/\s*,\s*/', ',', $clover_employee_id);
 
     $new_id = intval($wpdb->insert_id);
     $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id=%d", $new_id), ARRAY_A);
+    $this->audit_log('insert', $table, [
+      'id' => $new_id,
+      'row' => $row,
+    ]);
 
     wp_send_json_success(['emp' => $row]);
   }
