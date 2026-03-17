@@ -2542,18 +2542,76 @@ private function render_print_html($items){
   $items = is_array($items) ? $items : [];
   if (empty($items)) return '';
 
+  $detailFields = [
+    'jornada' => 'Jornada',
+    'bono' => 'Bono',
+    'descuentos' => 'Descuentos',
+    'vac_tomadas' => 'Vac. tomadas',
+    'feriados' => 'Feriados',
+    'liquidacion' => 'Liquidación',
+    'vac_no_tomadas' => 'Vac. no tomadas',
+  ];
+
   $fmt = function($n){
     $n = (float)$n;
     return '$' . number_format($n, 0, ',', '.');
   };
   $titleName = $items[0]['nombre'] ?? 'Recibo';
   $titleMonth = $items[0]['mes_label'] ?? '';
+  $isCombinedReceipt = count($items) > 1;
 
   $maybeRow = function($label, $value) use ($fmt){
     if ($value === null || $value === '' || (is_numeric($value) && (float)$value == 0)) return '';
     $v = is_numeric($value) ? $fmt($value) : esc_html($value);
     return "<tr><td>{$label}</td><td class='right'>{$v}</td></tr>";
   };
+
+  if ($isCombinedReceipt) {
+    $detailSums = [];
+    foreach ($detailFields as $field => $label) {
+      $detailSums[$field] = 0;
+    }
+
+    $totalPago = 0;
+    $totalsByPayment = [
+      'efectivo' => 0,
+      'transferencia' => 0,
+      'creditos' => 0,
+    ];
+    foreach ($items as $item) {
+      $totalPago += (float)($item['total_pago'] ?? 0);
+      $totalsByPayment['efectivo'] += (float)($item['efectivo'] ?? 0);
+      $totalsByPayment['transferencia'] += (float)($item['transferencia'] ?? 0);
+      $totalsByPayment['creditos'] += (float)($item['creditos'] ?? 0);
+      $row = is_array($item['row'] ?? null) ? $item['row'] : [];
+      foreach ($detailFields as $field => $label) {
+        $detailSums[$field] += (float)($row[$field] ?? 0);
+      }
+    }
+
+    $items = [[
+      'nombre' => $items[0]['nombre'] ?? '—',
+      'legajo' => $items[0]['legajo'] ?? '—',
+      'mes_label' => $items[0]['mes_label'] ?? '',
+      'total_pago' => $totalPago,
+      'detalle_rows' => $detailSums,
+      'pago_rows' => $items,
+      'pago_totals' => $totalsByPayment,
+      'is_combined' => true,
+    ]];
+  } else {
+    foreach ($items as &$item) {
+      $row = is_array($item['row'] ?? null) ? $item['row'] : [];
+      $item['detalle_rows'] = [];
+      foreach ($detailFields as $field => $label) {
+        $item['detalle_rows'][$field] = (float)($row[$field] ?? 0);
+      }
+      $item['pago_rows'] = [$item];
+      $item['pago_totals'] = null;
+      $item['is_combined'] = false;
+    }
+    unset($item);
+  }
 
   ob_start(); ?>
 <!doctype html>
@@ -2571,10 +2629,6 @@ private function render_print_html($items){
     .brand { font-weight: 800; font-size: 14px; letter-spacing:.02em; }
     .muted { color:#555; }
     .h1 { font-weight: 900; font-size: 16px; margin: 2px 0 4px; }
-    .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin-top:10px; }
-    .kv { border:1px solid #e2e2e2; border-radius:10px; padding:10px 12px; }
-    .kv .k { font-weight: 800; color:#555; font-size: 11px; text-transform: uppercase; letter-spacing:.06em; margin-bottom:4px; }
-    .kv .v { font-weight: 800; font-size: 13px; }
     .section { margin-top: 14px; }
     .section-title { font-weight: 900; text-transform: uppercase; letter-spacing:.08em; font-size: 11px; color:#666; margin-bottom:8px; }
     table { width:100%; border-collapse: collapse; }
@@ -2599,7 +2653,7 @@ private function render_print_html($items){
     <div class="printbar">
       <button class="btn" onclick="window.print()">Imprimir / Guardar PDF</button>
     </div>
-    <?php foreach ($items as $d): $row = $d['row']; ?>
+    <?php foreach ($items as $d): ?>
     <div class="print-item">
     <div class="top">
       <div>
@@ -2609,19 +2663,7 @@ private function render_print_html($items){
       </div>
       <div class="muted">
         <div><strong>Período:</strong> <?php echo esc_html($d['mes_label']); ?></div>
-        <?php if ($d['periodo_inicio'] && $d['periodo_fin']): ?>
-          <div class="small"><?php echo esc_html($d['periodo_inicio']); ?> → <?php echo esc_html($d['periodo_fin']); ?></div>
-        <?php endif; ?>
       </div>
-    </div>
-
-    <div class="grid2">
-      <?php if (!empty($d['area'])): ?>
-        <div class="kv"><div class="k">Área / Local</div><div class="v"><?php echo esc_html($d['area']); ?></div></div>
-      <?php endif; ?>
-      <?php if (!empty($d['rol'])): ?>
-        <div class="kv"><div class="k">Rol</div><div class="v"><?php echo esc_html($d['rol']); ?></div></div>
-      <?php endif; ?>
     </div>
 
     <div class="section">
@@ -2629,17 +2671,31 @@ private function render_print_html($items){
       <table>
         <thead>
           <tr>
+            <th class="center">Área / Local</th>
+            <th class="center">Rol</th>
             <th class="center">Efectivo</th>
             <th class="center">Transferencia</th>
             <th class="center">Créditos</th>
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td class="center"><?php echo $fmt($d['efectivo']); ?></td>
-            <td class="center"><?php echo $fmt($d['transferencia']); ?></td>
-            <td class="center"><?php echo $fmt($d['creditos']); ?></td>
-          </tr>
+          <?php foreach (($d['pago_rows'] ?? []) as $p): ?>
+            <tr>
+              <td class="center"><?php echo esc_html(($p['area'] ?? '') ?: '-'); ?></td>
+              <td class="center"><?php echo esc_html(($p['rol'] ?? '') ?: '-'); ?></td>
+              <td class="center"><?php echo $fmt($p['efectivo'] ?? 0); ?></td>
+              <td class="center"><?php echo $fmt($p['transferencia'] ?? 0); ?></td>
+              <td class="center"><?php echo $fmt($p['creditos'] ?? 0); ?></td>
+            </tr>
+          <?php endforeach; ?>
+          <?php if (!empty($d['is_combined']) && !empty($d['pago_totals'])): ?>
+            <tr>
+              <td class="center" colspan="2"><strong>Total</strong></td>
+              <td class="center"><strong><?php echo $fmt($d['pago_totals']['efectivo'] ?? 0); ?></strong></td>
+              <td class="center"><strong><?php echo $fmt($d['pago_totals']['transferencia'] ?? 0); ?></strong></td>
+              <td class="center"><strong><?php echo $fmt($d['pago_totals']['creditos'] ?? 0); ?></strong></td>
+            </tr>
+          <?php endif; ?>
         </tbody>
       </table>
       <div class="note"><strong>Total pagado:</strong> <?php echo $fmt($d['total_pago']); ?></div>
@@ -2653,13 +2709,9 @@ private function render_print_html($items){
         </thead>
         <tbody>
           <?php
-            echo $maybeRow('Jornada', $row['jornada'] ?? 0);
-            echo $maybeRow('Bono', $row['bono'] ?? 0);
-            echo $maybeRow('Descuentos', $row['descuentos'] ?? 0);
-            echo $maybeRow('Vac. tomadas', $row['vac_tomadas'] ?? 0);
-            echo $maybeRow('Feriados', $row['feriados'] ?? 0);
-            echo $maybeRow('Liquidación', $row['liquidacion'] ?? 0);
-            echo $maybeRow('Vac. no tomadas', $row['vac_no_tomadas'] ?? 0);
+            foreach ($detailFields as $field => $label) {
+              echo $maybeRow($label, $d['detalle_rows'][$field] ?? 0);
+            }
           ?>
         </tbody>
       </table>
