@@ -25,7 +25,7 @@
 
 /* ===== Header izquierdo ===== */
 .kolrrhh-title{
-  display:flex; align-items:center; justify-content:space-between;
+  display:flex; align-items:center; justify-content:flex-start;
   padding: 14px 14px 12px;
   border-radius: 14px;
   background: rgba(0,0,0,.04);
@@ -35,7 +35,6 @@
 /* Acciones en una misma línea: badge + plus */
 .kolrrhh-top-actions{
   display:flex;
-  gap: 10px;
   align-items:center;
 }
 
@@ -89,6 +88,86 @@
 .kolrrhh-filter-input:focus{
   border-color: rgba(46, 204, 113, .6);
   box-shadow: 0 0 0 3px rgba(46, 204, 113, .15);
+}
+
+.kolrrhh-menu{
+  position: relative;
+}
+.kolrrhh-menu-trigger{
+  list-style: none;
+  min-width: 170px;
+  height: 46px;
+  border-radius: 14px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  font-weight: 800;
+  font-size: 15px;
+  border: 1px solid rgba(0,0,0,.10);
+  background: #fff;
+  color: #111;
+  padding: 0 16px;
+  box-shadow: 0 10px 24px rgba(0,0,0,.06);
+  cursor:pointer;
+}
+.kolrrhh-menu-trigger::-webkit-details-marker{
+  display:none;
+}
+.kolrrhh-menu-trigger:hover{
+  border-color: rgba(46, 204, 113, .5);
+}
+.kolrrhh-menu-trigger:focus-visible,
+.kolrrhh-menu[open] .kolrrhh-menu-trigger{
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(46, 204, 113, .15);
+  border-color: rgba(46, 204, 113, .6);
+}
+.kolrrhh-menu-chevron{
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform .18s ease;
+}
+.kolrrhh-menu[open] .kolrrhh-menu-chevron{
+  transform: rotate(180deg);
+}
+.kolrrhh-menu-panel{
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 18px;
+  width: 220px;
+  padding: 10px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,.08);
+  box-shadow: 0 18px 36px rgba(0,0,0,.12);
+  display: none;
+  z-index: 20;
+}
+.kolrrhh-menu[open] .kolrrhh-menu-panel{
+  display: grid;
+  gap: 6px;
+}
+.kolrrhh-menu-item{
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #4a4a4a;
+  cursor: pointer;
+}
+.kolrrhh-menu-item:hover{
+  background: rgba(46, 204, 113, .12);
+  color: #0b3d1e;
 }
 
 /* ===== Scroll de lista ===== */

@@ -270,27 +270,25 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
       <div class="kolrrhh-shell">
         <div class="kolrrhh-left">
           <div class="kolrrhh-title">
-            <div>
-              <h2>Personal</h2>
-            </div>
             <div class="kolrrhh-top-actions">
-              <div class="kolrrhh-badge kolrrhh-badge-green" title="Activos"><?php echo esc_html(count($activos)); ?></div>
-              <button type="button" class="kolrrhh-badge kolrrhh-history-btn" id="kolrrhh-open-history" title="Ver historial" aria-label="Ver historial">
-                <svg class="kolrrhh-history-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M3 4v5h5"></path>
-                  <path d="M4.8 11a8 8 0 1 1 2.4 6.3"></path>
-                  <path d="M12 8v4l3 2"></path>
-                </svg>
-              </button>
-              <button type="button" class="kolrrhh-badge kolrrhh-store-btn" id="kolrrhh-open-locales" title="Ver locales" aria-label="Ver locales">
-                <svg class="kolrrhh-store-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M3 10h18v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V10z"></path>
-                  <path d="M4 10V6a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v4"></path>
-                  <path d="M7 21v-7h10v7"></path>
-                  <path d="M2 10h20"></path>
-                </svg>
-              </button>
-              <button type="button" class="kolrrhh-badge kolrrhh-badge-green kolrrhh-add" id="kolrrhh-add" title="Agregar personal">+</button>
+              <details class="kolrrhh-menu" id="kolrrhh-main-menu-wrap">
+                <summary
+                  class="kolrrhh-menu-trigger"
+                  id="kolrrhh-main-menu-trigger"
+                  aria-haspopup="true"
+                  aria-controls="kolrrhh-main-menu"
+                >
+                  <span>Opciones</span>
+                  <svg class="kolrrhh-menu-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M6 9l6 6 6-6"></path>
+                  </svg>
+                </summary>
+                <div class="kolrrhh-menu-panel" id="kolrrhh-main-menu" role="menu" aria-hidden="true">
+                  <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-history" role="menuitem">Historial</button>
+                  <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-locales" role="menuitem">Locales</button>
+                  <button type="button" class="kolrrhh-menu-item" id="kolrrhh-add" role="menuitem">Agregar personal</button>
+                </div>
+              </details>
             </div>
           </div>
 
@@ -306,14 +304,14 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
 
           <div class="kolrrhh-left-scroll">
             <div class="kolrrhh-section">
-              <div class="kolrrhh-section-h">Activos</div>
+              <div class="kolrrhh-section-h">Activos (<?php echo esc_html(count($activos)); ?>)</div>
               <div class="kolrrhh-list" id="kolrrhh-list-activos">
                 <?php echo $this->render_list($activos); ?>
               </div>
             </div>
 
             <div class="kolrrhh-section">
-              <div class="kolrrhh-section-h">Inactivos</div>
+              <div class="kolrrhh-section-h">Inactivos (<?php echo esc_html(count($otros)); ?>)</div>
               <div class="kolrrhh-list" id="kolrrhh-list-otros">
                 <?php echo $this->render_list($otros); ?>
               </div>
