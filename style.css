@@ -164,6 +164,9 @@
   font-weight: 700;
   color: #4a4a4a;
   cursor: pointer;
+  display: block;
+  text-decoration: none;
+  box-sizing: border-box;
 }
 .kolrrhh-menu-item:hover{
   background: rgba(46, 204, 113, .12);

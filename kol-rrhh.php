@@ -29,6 +29,7 @@ final class KOL_RRHH_Plugin {
     add_action('wp_ajax_kol_rrhh_print_sueldo_item', [$this, 'ajax_print_sueldo_item']);
     add_action('wp_ajax_kol_rrhh_get_base', [$this,'ajax_get_base']);
     add_action('wp_ajax_kol_rrhh_get_comision', [$this,'ajax_get_comision']);
+    add_action('wp_ajax_kol_rrhh_view_log', [$this,'ajax_view_log']);
     add_shortcode(self::SHORTCODE, [$this,'shortcode']);
   }
 
@@ -210,6 +211,106 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
     @file_put_contents($this->audit_log_path(), $line, FILE_APPEND | LOCK_EX);
   }
 
+  private function parse_audit_log_entries_for_month($yearMonth){
+    $path = $this->audit_log_path();
+    if (!file_exists($path)) return [];
+
+    $lines = @file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (!is_array($lines)) return [];
+
+    $entries = [];
+    foreach ($lines as $line) {
+      $line = trim((string)$line);
+      if ($line === '') continue;
+      if (!preg_match('/^\[(.*?)\]\s+user="(.*?)"\s+action="(.*?)"\s+table="(.*?)"\s+details=(.*)$/', $line, $m)) {
+        continue;
+      }
+
+      $ts = trim((string)$m[1]);
+      if ($yearMonth !== '' && strpos($ts, $yearMonth . '-') !== 0) continue;
+
+      $details = json_decode((string)$m[5], true);
+      $entries[] = [
+        'timestamp' => $ts,
+        'user' => (string)$m[2],
+        'action' => (string)$m[3],
+        'table' => (string)$m[4],
+        'details' => is_array($details) ? $details : (string)$m[5],
+      ];
+    }
+
+    usort($entries, function($a, $b){
+      return strcmp((string)($b['timestamp'] ?? ''), (string)($a['timestamp'] ?? ''));
+    });
+
+    return $entries;
+  }
+
+  public function ajax_view_log(){
+    if (!$this->has_plugin_access()) wp_die('No tenes acceso a este modulo.');
+    if (!isset($_GET['nonce']) || !wp_verify_nonce($_GET['nonce'], 'kol_rrhh_nonce')) wp_die('Nonce invalido');
+
+    $yearMonth = isset($_GET['month']) ? sanitize_text_field(wp_unslash($_GET['month'])) : current_time('Y-m');
+    if (!preg_match('/^\d{4}-\d{2}$/', $yearMonth)) {
+      $yearMonth = current_time('Y-m');
+    }
+
+    $entries = $this->parse_audit_log_entries_for_month($yearMonth);
+    $titleMonth = strtoupper(date_i18n('F Y', strtotime($yearMonth . '-01')));
+
+    header('Content-Type: text/html; charset=UTF-8');
+    ?>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Log RRHH - <?php echo esc_html($titleMonth); ?></title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 0; background: #f5f7f8; color:#111; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    .head { margin-bottom: 18px; }
+    .title { margin: 0 0 6px; font-size: 28px; font-weight: 900; }
+    .sub { color: #666; font-size: 14px; }
+    .card { background: #fff; border: 1px solid rgba(0,0,0,.08); border-radius: 18px; box-shadow: 0 16px 30px rgba(0,0,0,.06); overflow: hidden; }
+    .entry { padding: 16px 18px; }
+    .entry + .entry { border-top: 1px solid rgba(0,0,0,.08); }
+    .meta { display:flex; flex-wrap:wrap; gap: 8px 14px; align-items:center; margin-bottom: 10px; font-size: 13px; color: #4b5563; }
+    .pill { display:inline-flex; align-items:center; border-radius: 999px; padding: 5px 10px; font-weight: 700; background: rgba(46, 204, 113, .14); color: #0b3d1e; }
+    .table { font-weight: 700; color: #111; }
+    pre { margin: 0; background: #f8fafb; border: 1px solid rgba(0,0,0,.06); border-radius: 12px; padding: 12px; font-size: 12px; overflow:auto; white-space: pre-wrap; word-break: break-word; }
+    .empty { padding: 28px; text-align:center; color:#666; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <h1 class="title">Log de actividad</h1>
+      <div class="sub">Mes: <?php echo esc_html($titleMonth); ?>. Ordenado del mas nuevo al mas viejo.</div>
+    </div>
+    <div class="card">
+      <?php if (empty($entries)): ?>
+        <div class="empty">No hay registros para este mes.</div>
+      <?php else: ?>
+        <?php foreach ($entries as $entry): ?>
+          <div class="entry">
+            <div class="meta">
+              <span class="pill"><?php echo esc_html(strtoupper((string)$entry['action'])); ?></span>
+              <span><?php echo esc_html((string)$entry['timestamp']); ?></span>
+              <span><?php echo esc_html((string)$entry['user']); ?></span>
+              <span class="table"><?php echo esc_html((string)$entry['table']); ?></span>
+            </div>
+            <pre><?php echo esc_html(wp_json_encode($entry['details'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?></pre>
+          </div>
+        <?php endforeach; ?>
+      <?php endif; ?>
+    </div>
+  </div>
+</body>
+</html>
+<?php
+    exit;
+  }
+
   private function render_access_denied_notice(){
     return '<div class="kolrrhh-no-access">No tenés acceso a este módulo. Solicitá acceso a administración.</div>';
   }
@@ -259,6 +360,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
 
     $activos = [];
     $otros   = [];
+    $log_url = wp_nonce_url(admin_url('admin-ajax.php?action=kol_rrhh_view_log'), 'kol_rrhh_nonce', 'nonce');
     foreach ($empleados as $e){
       $estado = strtoupper(trim((string)($e['estado'] ?? '')));
       if ($estado === 'ACTIVO') $activos[] = $e;
@@ -286,6 +388,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
                 <div class="kolrrhh-menu-panel" id="kolrrhh-main-menu" role="menu" aria-hidden="true">
                   <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-history" role="menuitem">Historial</button>
                   <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-locales" role="menuitem">Locales</button>
+                  <a class="kolrrhh-menu-item" href="<?php echo esc_url($log_url); ?>" target="_blank" rel="noopener noreferrer" role="menuitem">Log</a>
                   <button type="button" class="kolrrhh-menu-item" id="kolrrhh-add" role="menuitem">Agregar personal</button>
                 </div>
               </details>
