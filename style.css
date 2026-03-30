@@ -1169,6 +1169,35 @@
   opacity: .75;
   letter-spacing: .04em;
 }
+.kolrrhh-sueldo-extra-row td{
+  background: rgba(0,0,0,.02);
+  padding: 12px;
+}
+.kolrrhh-sueldo-extra-grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap:10px;
+}
+.kolrrhh-sueldo-extra-item{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  padding:10px 12px;
+  border:1px solid rgba(0,0,0,.08);
+  border-radius:12px;
+  background:#fff;
+}
+.kolrrhh-sueldo-extra-item strong{
+  font-size:14px;
+  color:#1d2c49;
+}
+.kolrrhh-sueldo-extra-label{
+  font-size:11px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  color:rgba(0,0,0,.62);
+}
 .kolrrhh-form-field select.kolrrhh-modal-input{
   appearance: none;
   background-image:
@@ -1456,6 +1485,66 @@
   color: #2e446f;
   padding: 14px;
   background: #e4ebf7 !important;
+}
+.kolrrhh-log-head-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.kolrrhh-log-month-input{
+  min-width: 160px;
+}
+.kolrrhh-log-card{
+  background: #fff;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 18px;
+  box-shadow: 0 16px 30px rgba(0,0,0,.06);
+  overflow: hidden;
+}
+.kolrrhh-log-entry{
+  padding: 16px 18px;
+}
+.kolrrhh-log-entry + .kolrrhh-log-entry{
+  border-top: 1px solid rgba(0,0,0,.08);
+}
+.kolrrhh-log-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap: 8px 14px;
+  align-items:center;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #4b5563;
+}
+.kolrrhh-log-pill{
+  display:inline-flex;
+  align-items:center;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-weight: 700;
+  background: rgba(46, 204, 113, .14);
+  color: #0b3d1e;
+}
+.kolrrhh-log-table{
+  font-weight: 700;
+  color: #111;
+}
+.kolrrhh-log-pre{
+  margin: 0;
+  background: #f8fafb;
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 12px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.kolrrhh-log-empty{
+  padding: 28px;
+  text-align:center;
+  color:#666;
 }
 .kolrrhh-locales-name-cell{
   font-weight: 800;

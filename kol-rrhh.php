@@ -249,17 +249,337 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
     return $entries;
   }
 
+  private function kol_rrhh_parse_decimal($value){
+    if (is_string($value)) {
+      $value = str_replace(',', '.', $value);
+    }
+    return is_numeric($value) ? (float)$value : 0.0;
+  }
+
+  private function kol_rrhh_years_vencidos($startIso, $refIso){
+    $start = trim((string)$startIso);
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $start)) return 0;
+
+    $ref = trim((string)$refIso);
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $ref)) {
+      $ref = current_time('Y-m-d');
+    }
+
+    try {
+      $d1 = new DateTime($start);
+      $d2 = new DateTime($ref);
+      if ($d2 < $d1) return 0;
+      return (int)$d1->diff($d2)->y;
+    } catch (Exception $e) {
+      return 0;
+    }
+  }
+
+  private function kol_rrhh_get_base_table_amount($rol, $horas){
+    static $cache = [];
+    $key = md5((string)$rol . '|' . (string)$horas);
+    if (array_key_exists($key, $cache)) return $cache[$key];
+
+    global $wpdb;
+
+    $t_roles   = $wpdb->prefix . 'kol_rrhh_roles';
+    $t_horas   = $wpdb->prefix . 'kol_rrhh_horas_bandas';
+    $t_basicos = $wpdb->prefix . 'kol_rrhh_basicos';
+
+    foreach ([$t_roles, $t_horas, $t_basicos] as $t){
+      $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $t));
+      if ($exists !== $t) {
+        $cache[$key] = 0.0;
+        return 0.0;
+      }
+    }
+
+    $cols_r = $wpdb->get_col("SHOW COLUMNS FROM {$t_roles}", 0) ?: [];
+    $cols_h = $wpdb->get_col("SHOW COLUMNS FROM {$t_horas}", 0) ?: [];
+    $cols_b = $wpdb->get_col("SHOW COLUMNS FROM {$t_basicos}", 0) ?: [];
+
+    $colRoleIdB = '';
+    foreach (['rol_id','id_rol','roles_id'] as $c){ if (in_array($c,$cols_b,true)) { $colRoleIdB=$c; break; } }
+    $colHorasIdB = '';
+    foreach (['horas_id','id_horas','banda_horas_id'] as $c){ if (in_array($c,$cols_b,true)) { $colHorasIdB=$c; break; } }
+    $colBase = '';
+    foreach (['base','basico','monto','valor'] as $c){ if (in_array($c,$cols_b,true)) { $colBase=$c; break; } }
+
+    $colRoleId = '';
+    foreach (['rol_id','id_rol','id'] as $c){ if (in_array($c,$cols_r,true)) { $colRoleId=$c; break; } }
+    $colRoleName = '';
+    foreach (['nombre','rol','descripcion'] as $c){ if (in_array($c,$cols_r,true)) { $colRoleName=$c; break; } }
+
+    $colHorasId = '';
+    foreach (['horas_id','id_horas','id'] as $c){ if (in_array($c,$cols_h,true)) { $colHorasId=$c; break; } }
+    $colHorasVal = '';
+    foreach (['horas','cantidad','valor'] as $c){ if (in_array($c,$cols_h,true)) { $colHorasVal=$c; break; } }
+
+    if (!$colRoleIdB || !$colHorasIdB || !$colBase || !$colRoleId || !$colRoleName || !$colHorasId || !$colHorasVal){
+      $cache[$key] = 0.0;
+      return 0.0;
+    }
+
+    $sql = "
+      SELECT b.{$colBase} AS base
+      FROM {$t_basicos} b
+      INNER JOIN {$t_roles} r ON r.{$colRoleId} = b.{$colRoleIdB}
+      INNER JOIN {$t_horas} h ON h.{$colHorasId} = b.{$colHorasIdB}
+      WHERE r.{$colRoleName} = %s
+        AND CAST(h.{$colHorasVal} AS DECIMAL(10,2)) = %f
+      LIMIT 1
+    ";
+
+    $row = $wpdb->get_row($wpdb->prepare($sql, (string)$rol, (float)$horas), ARRAY_A);
+    $cache[$key] = ($row && isset($row['base'])) ? $this->kol_rrhh_parse_decimal($row['base']) : 0.0;
+    return $cache[$key];
+  }
+
+  private function kol_rrhh_get_comision_rendimiento_data($area, $year, $month){
+    static $cache = [];
+    $key = md5((string)$area . '|' . (int)$year . '|' . (int)$month);
+    if (array_key_exists($key, $cache)) return $cache[$key];
+
+    $result = [
+      'comision_coef' => 0.0,
+      'rendimiento_local' => 0.0,
+      'ventas' => 0.0,
+    ];
+
+    global $wpdb;
+    $t_locales = $wpdb->prefix . 'kol_locales';
+    $t_ventas  = $wpdb->prefix . 'kol_rrhh_ventas_mensuales';
+    $t_rend    = $wpdb->prefix . 'kol_rrhh_desempeno_locales';
+
+    foreach ([$t_locales, $t_ventas, $t_rend] as $t){
+      $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $t));
+      if ($exists !== $t) {
+        $cache[$key] = $result;
+        return $result;
+      }
+    }
+
+    $cols_l = $wpdb->get_col("SHOW COLUMNS FROM {$t_locales}", 0) ?: [];
+    $cols_v = $wpdb->get_col("SHOW COLUMNS FROM {$t_ventas}", 0) ?: [];
+    $cols_r = $wpdb->get_col("SHOW COLUMNS FROM {$t_rend}", 0) ?: [];
+
+    $colLocId = '';
+    foreach (['local_id','id_local','locales_id','id_locales','local'] as $c){
+      if (in_array($c,$cols_l,true)) { $colLocId=$c; break; }
+    }
+    $colLocName = '';
+    foreach (['nombre','local','descripcion'] as $c){
+      if (in_array($c,$cols_l,true)) { $colLocName=$c; break; }
+    }
+    $colVLocal = '';
+    foreach (['local_id','id_local','locales_id','id_locales','local'] as $c){
+      if (in_array($c,$cols_v,true)) { $colVLocal=$c; break; }
+    }
+    $colVAnio = in_array('anio',$cols_v,true) ? 'anio' : '';
+    $colVMes  = in_array('mes',$cols_v,true) ? 'mes' : '';
+    $colVVentas = '';
+    foreach (['ventas','monto','importe','total'] as $c){
+      if (in_array($c,$cols_v,true)) { $colVVentas=$c; break; }
+    }
+    $colRLocal = '';
+    foreach (['local_id','id_local','locales_id','id_locales','local'] as $c){
+      if (in_array($c,$cols_r,true)) { $colRLocal=$c; break; }
+    }
+    $colRAnio = in_array('anio',$cols_r,true) ? 'anio' : '';
+    $colRMes  = in_array('mes',$cols_r,true) ? 'mes' : '';
+    $colRendTotal = '';
+    foreach (['total_pct','rendimiento_total','total','rendimiento'] as $c){
+      if (in_array($c,$cols_r,true)) { $colRendTotal=$c; break; }
+    }
+    $colRendComision = '';
+    foreach (['comision_coef','comision','coeficiente_comision'] as $c){
+      if (in_array($c,$cols_r,true)) { $colRendComision=$c; break; }
+    }
+
+    if (!$colLocId || !$colLocName || !$colVLocal || !$colVAnio || !$colVMes || !$colVVentas || !$colRLocal || !$colRAnio || !$colRMes || !$colRendTotal || !$colRendComision){
+      $cache[$key] = $result;
+      return $result;
+    }
+
+    $localId = intval($wpdb->get_var(
+      $wpdb->prepare("SELECT {$colLocId} FROM {$t_locales} WHERE {$colLocName} = %s LIMIT 1", (string)$area)
+    ));
+    if ($localId <= 0) {
+      $cache[$key] = $result;
+      return $result;
+    }
+
+    $ventas = $wpdb->get_var(
+      $wpdb->prepare(
+        "SELECT {$colVVentas} FROM {$t_ventas} WHERE {$colVLocal} = %d AND {$colVAnio} = %d AND {$colVMes} = %d LIMIT 1",
+        $localId, (int)$year, (int)$month
+      )
+    );
+    $row = $wpdb->get_row(
+      $wpdb->prepare(
+        "SELECT {$colRendComision} AS comision_coef, {$colRendTotal} AS rendimiento_local
+         FROM {$t_rend}
+         WHERE {$colRLocal} = %d AND {$colRAnio} = %d AND {$colRMes} = %d
+         LIMIT 1",
+        $localId, (int)$year, (int)$month
+      ),
+      ARRAY_A
+    );
+
+    $result = [
+      'comision_coef' => $this->kol_rrhh_parse_decimal($row['comision_coef'] ?? 0),
+      'rendimiento_local' => $this->kol_rrhh_parse_decimal($row['rendimiento_local'] ?? 0),
+      'ventas' => $this->kol_rrhh_parse_decimal($ventas),
+    ];
+    $cache[$key] = $result;
+    return $result;
+  }
+
+  private function kol_rrhh_get_desempeno_pct($legajo, $yearMonth){
+    static $cache = [];
+    $key = md5((string)$legajo . '|' . (string)$yearMonth);
+    if (array_key_exists($key, $cache)) return $cache[$key];
+
+    global $wpdb;
+    $table = $this->desempeno_table();
+    $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table));
+    if ($exists !== $table) {
+      $cache[$key] = 0.0;
+      return 0.0;
+    }
+
+    $row = $wpdb->get_row(
+      $wpdb->prepare(
+        "SELECT mes, desempeno FROM {$table} WHERE legajo = %d ORDER BY mes DESC, id DESC",
+        (int)$legajo
+      ),
+      ARRAY_A
+    );
+
+    $rows = $wpdb->get_results(
+      $wpdb->prepare("SELECT mes, desempeno FROM {$table} WHERE legajo = %d", (int)$legajo),
+      ARRAY_A
+    ) ?: [];
+
+    foreach ($rows as $item) {
+      $mes = (string)($item['mes'] ?? '');
+      if (preg_match('/^(\d{4})-(\d{2})/', $mes, $m) && ($m[1] . '-' . $m[2]) === $yearMonth) {
+        $cache[$key] = $this->kol_rrhh_parse_decimal($item['desempeno'] ?? 0);
+        return $cache[$key];
+      }
+    }
+
+    $cache[$key] = 0.0;
+    return 0.0;
+  }
+
+  private function kol_rrhh_calculate_sueldo_breakdown($row, $employee = []){
+    $row = is_array($row) ? $row : [];
+    $employee = is_array($employee) ? $employee : [];
+
+    $tipo = strtolower(trim((string)($row['tipo_liquidacion'] ?? 'empleado')));
+    if ($tipo === 'monotributista') {
+      return [
+        'base' => 0.0,
+        'antig' => 0.0,
+        'comision' => 0.0,
+        'desempeno_personal' => 0.0,
+        'rendimiento' => 0.0,
+        'no_rem' => 0.0,
+      ];
+    }
+
+    $dias = $this->kol_rrhh_parse_decimal($row['dias_de_trabajo'] ?? 0);
+    $participacion = $this->kol_rrhh_parse_decimal($row['participacion'] ?? 0);
+    if ($participacion < 0) $participacion = 0;
+    if ($participacion > 1) $participacion = 1;
+    $proporcionDias = max(0, $dias) / 26;
+
+    $baseTabla = $this->kol_rrhh_get_base_table_amount((string)($row['rol'] ?? ''), $this->kol_rrhh_parse_decimal($row['horas'] ?? 0));
+    $base = $baseTabla * $proporcionDias;
+
+    $antig = 0.0;
+    $vinculo = trim((string)($employee['vinculo_para_antiguedad'] ?? ''));
+    if ($vinculo !== '' && $base > 0) {
+      $years = $this->kol_rrhh_years_vencidos($vinculo, (string)($row['periodo_fin'] ?? ''));
+      $antig = $base * 0.01 * $years * $proporcionDias;
+    }
+
+    $comision = 0.0;
+    $rendimiento = 0.0;
+    $periodoRef = (string)($row['periodo_fin'] ?: ($row['periodo_inicio'] ?? ''));
+    if (preg_match('/^(\d{4})-(\d{2})/', $periodoRef, $m)) {
+      $area = (string)($row['area'] ?? '');
+      $locales = $this->register_assets_locales_list();
+      if (in_array($area, $locales, true)) {
+        $comisionData = $this->kol_rrhh_get_comision_rendimiento_data($area, (int)$m[1], (int)$m[2]);
+        $factor = 0.0;
+        if ($area === 'Dep') $factor = 0.009;
+        if (in_array($area, ['Local 15','Local 34','Local 55','Lujan','Osi','Sh','Sol','Stoto','Urb'], true)) $factor = 0.01;
+        $comision = $comisionData['ventas'] * $comisionData['comision_coef'] * $factor * $participacion;
+        $rendimiento = $comisionData['rendimiento_local'] * $participacion * 300000;
+      }
+    }
+
+    $desempenoPersonal = 0.0;
+    $legajo = intval($row['legajo'] ?? 0);
+    if ($legajo > 0 && $base > 0 && preg_match('/^(\d{4})-(\d{2})/', $periodoRef, $m)) {
+      $desPct = $this->kol_rrhh_get_desempeno_pct($legajo, $m[1] . '-' . $m[2]);
+      $desempenoPersonal = $base * ($desPct / 100);
+    }
+
+    $noRem = ($base * 0.6) + ($proporcionDias * 100000);
+
+    return [
+      'base' => $base,
+      'antig' => $antig,
+      'comision' => $comision,
+      'desempeno_personal' => $desempenoPersonal,
+      'rendimiento' => $rendimiento,
+      'no_rem' => $noRem,
+    ];
+  }
+
+  private function register_assets_locales_list(){
+    static $locales = null;
+    if (is_array($locales)) return $locales;
+    global $wpdb;
+    $locales = $wpdb->get_col("
+      SELECT nombre
+      FROM wp_kol_locales
+      ORDER BY nombre
+    ");
+    return is_array($locales) ? $locales : [];
+  }
+
   public function ajax_view_log(){
     if (!$this->has_plugin_access()) wp_die('No tenes acceso a este modulo.');
-    if (!isset($_GET['nonce']) || !wp_verify_nonce($_GET['nonce'], 'kol_rrhh_nonce')) wp_die('Nonce invalido');
+    $nonce = '';
+    if (isset($_REQUEST['nonce'])) {
+      $nonce = sanitize_text_field(wp_unslash($_REQUEST['nonce']));
+    }
+    if (!$nonce || !wp_verify_nonce($nonce, 'kol_rrhh_nonce')) {
+      if (wp_doing_ajax()) {
+        wp_send_json_error(['message' => 'Nonce invalido'], 403);
+      }
+      wp_die('Nonce invalido');
+    }
 
-    $yearMonth = isset($_GET['month']) ? sanitize_text_field(wp_unslash($_GET['month'])) : current_time('Y-m');
+    $yearMonth = isset($_REQUEST['month']) ? sanitize_text_field(wp_unslash($_REQUEST['month'])) : current_time('Y-m');
     if (!preg_match('/^\d{4}-\d{2}$/', $yearMonth)) {
       $yearMonth = current_time('Y-m');
     }
 
     $entries = $this->parse_audit_log_entries_for_month($yearMonth);
     $titleMonth = strtoupper(date_i18n('F Y', strtotime($yearMonth . '-01')));
+
+    if (isset($_SERVER['REQUEST_METHOD']) && strtoupper((string)$_SERVER['REQUEST_METHOD']) === 'POST') {
+      wp_send_json_success([
+        'month' => $yearMonth,
+        'title_month' => $titleMonth,
+        'entries' => $entries,
+      ]);
+    }
 
     header('Content-Type: text/html; charset=UTF-8');
     ?>
@@ -675,7 +995,6 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
 
     $activos = [];
     $otros   = [];
-    $log_url = wp_nonce_url(admin_url('admin-ajax.php?action=kol_rrhh_view_log'), 'kol_rrhh_nonce', 'nonce');
     foreach ($empleados as $e){
       $estado = strtoupper(trim((string)($e['estado'] ?? '')));
       if ($estado === 'ACTIVO') $activos[] = $e;
@@ -703,7 +1022,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
                 <div class="kolrrhh-menu-panel" id="kolrrhh-main-menu" role="menu" aria-hidden="true">
                   <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-history" role="menuitem">HISTORIAL</button>
                   <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-locales" role="menuitem">LOCALES</button>
-                  <a class="kolrrhh-menu-item" href="<?php echo esc_url($log_url); ?>" target="_blank" rel="noopener noreferrer" role="menuitem">LOG</a>
+                  <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-log" role="menuitem">LOG</button>
                   <button type="button" class="kolrrhh-menu-item" id="kolrrhh-add" role="menuitem">AGREGAR PERSONAL</button>
                   <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-editable-status" role="menuitem">BLOQUEAR EDICION</button>
                 </div>
@@ -1678,6 +1997,24 @@ public function ajax_get_sueldo_items(){
     ),
     ARRAY_A
   );
+
+  $employee = $wpdb->get_row(
+    $wpdb->prepare(
+      "SELECT legajo, vinculo_para_antiguedad FROM {$this->table_name()} WHERE legajo = %d LIMIT 1",
+      $legajo
+    ),
+    ARRAY_A
+  );
+
+  if (!empty($rows)) {
+    foreach ($rows as &$row) {
+      $calc = $this->kol_rrhh_calculate_sueldo_breakdown($row, $employee ?: []);
+      foreach ($calc as $calcKey => $calcValue) {
+        $row[$calcKey] = $calcValue;
+      }
+    }
+    unset($row);
+  }
 
   wp_send_json_success(['rows' => $rows ?: []]);
 }
@@ -3270,7 +3607,7 @@ $dayKey = $this->fmt_day_key($inDt);
   $empByLegajo = [];
   if (!empty($legajos)) {
     $ph = implode(',', array_fill(0, count($legajos), '%d'));
-    $sqlEmp = "SELECT nombre, legajo FROM {$this->table_name()} WHERE legajo IN ({$ph})";
+    $sqlEmp = "SELECT nombre, legajo, vinculo_para_antiguedad FROM {$this->table_name()} WHERE legajo IN ({$ph})";
     $emps = $wpdb->get_results($wpdb->prepare($sqlEmp, ...$legajos), ARRAY_A) ?: [];
     foreach ($emps as $e) {
       $k = intval($e['legajo'] ?? 0);
@@ -3291,6 +3628,7 @@ $dayKey = $this->fmt_day_key($inDt);
     $transfer = (float)($row['transferencia'] ?? 0);
     $creditos = (float)($row['creditos'] ?? 0);
     $total_pago = $efectivo + $transfer + $creditos;
+    $calc = $this->kol_rrhh_calculate_sueldo_breakdown($row, $emp);
 
     $items[] = [
       'nombre' => $emp['nombre'] ?? '—',
@@ -3305,6 +3643,7 @@ $dayKey = $this->fmt_day_key($inDt);
       'creditos' => $creditos,
       'total_pago' => $total_pago,
       'row' => $row,
+      'calc_rows' => $calc,
     ];
   }
 
@@ -3319,6 +3658,10 @@ private function render_print_html($items){
 
   $detailFields = [
     'jornada' => 'Jornada',
+    'antig' => 'Antig.',
+    'comision' => 'Comisión',
+    'desempeno_personal' => 'Desem. Pers.',
+    'rendimiento' => 'Rendimiento',
     'bono' => 'Bono',
     'descuentos' => 'Descuentos',
     'vac_tomadas' => 'Vac. tomadas',
@@ -3360,7 +3703,11 @@ private function render_print_html($items){
       $totalsByPayment['creditos'] += (float)($item['creditos'] ?? 0);
       $row = is_array($item['row'] ?? null) ? $item['row'] : [];
       foreach ($detailFields as $field => $label) {
-        $detailSums[$field] += (float)($row[$field] ?? 0);
+        if (isset($item['calc_rows'][$field])) {
+          $detailSums[$field] += (float)($item['calc_rows'][$field] ?? 0);
+        } else {
+          $detailSums[$field] += (float)($row[$field] ?? 0);
+        }
       }
     }
 
@@ -3377,9 +3724,14 @@ private function render_print_html($items){
   } else {
     foreach ($items as &$item) {
       $row = is_array($item['row'] ?? null) ? $item['row'] : [];
+      $calcRows = is_array($item['calc_rows'] ?? null) ? $item['calc_rows'] : [];
       $item['detalle_rows'] = [];
       foreach ($detailFields as $field => $label) {
-        $item['detalle_rows'][$field] = (float)($row[$field] ?? 0);
+        if (array_key_exists($field, $calcRows)) {
+          $item['detalle_rows'][$field] = (float)($calcRows[$field] ?? 0);
+        } else {
+          $item['detalle_rows'][$field] = (float)($row[$field] ?? 0);
+        }
       }
       $item['pago_rows'] = [$item];
       $item['pago_totals'] = null;

@@ -13,7 +13,7 @@
   let __CURRENT_LEGAJO__ = 0;
   let __CURRENT_CLOVER_ID__ = '';
   let __CURRENT_CLOVER_PAIRS__ = [];
-  let __VIEW_MODE__ = 'employees'; // employees | locales | history
+  let __VIEW_MODE__ = 'employees'; // employees | locales | history | log
   let __CURRENT_ULTIMO_INGRESO__ = '';
   let __CURRENT_VINCULO_ANTIG__ = '';
   let __CURRENT_BASE__ = 0;
@@ -1779,7 +1779,7 @@ async function refreshDesempenoPersonalDesempeno(){
                   <th>Descuentos</th>
                   <th>Vac. Tomadas</th>
                   <th>Feriados</th>
-                  <th>LiquidaciÃ³n</th>
+                  <th>Liquidación</th>
                   <th>Vac. No tomadas</th>
                 </tr>
               </thead>
@@ -1792,6 +1792,18 @@ async function refreshDesempenoPersonalDesempeno(){
                   <td>${moneyAR(r.feriados)}</td>
                   <td>${moneyAR(r.liquidacion)}</td>
                   <td>${moneyAR(r.vac_no_tomadas)}</td>
+                </tr>
+                <tr class="kolrrhh-sueldo-extra-row">
+                  <td colspan="7">
+                    <div class="kolrrhh-sueldo-extra-grid">
+                      <div class="kolrrhh-sueldo-extra-item"><span class="kolrrhh-sueldo-extra-label">Base</span><strong>${moneyAR(r.base || 0)}</strong></div>
+                      <div class="kolrrhh-sueldo-extra-item"><span class="kolrrhh-sueldo-extra-label">Antig.</span><strong>${moneyAR(r.antig || 0)}</strong></div>
+                      <div class="kolrrhh-sueldo-extra-item"><span class="kolrrhh-sueldo-extra-label">Comisión</span><strong>${moneyAR(r.comision || 0)}</strong></div>
+                      <div class="kolrrhh-sueldo-extra-item"><span class="kolrrhh-sueldo-extra-label">Desem. Pers.</span><strong>${moneyAR(r.desempeno_personal || 0)}</strong></div>
+                      <div class="kolrrhh-sueldo-extra-item"><span class="kolrrhh-sueldo-extra-label">Rendimiento</span><strong>${moneyAR(r.rendimiento || 0)}</strong></div>
+
+                    </div>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -2072,6 +2084,9 @@ async function refreshDesempenoPersonalDesempeno(){
     // === LOCALES: botÃ³n en el header izquierdo ===
     const localesBtn = qs('kolrrhh-open-locales');
     const historyBtn = qs('kolrrhh-open-history');
+    const logBtn = qs('kolrrhh-open-log');
+    const mainMenuWrap = qs('kolrrhh-main-menu-wrap');
+    const mainMenuPanel = qs('kolrrhh-main-menu');
 
     function toggleTabs(show){
       const tabs = document.querySelector('.kolrrhh-tabs');
@@ -2082,6 +2097,23 @@ async function refreshDesempenoPersonalDesempeno(){
 
     function clearEmployeeSelection(){
       document.querySelectorAll('.kolrrhh-item.is-selected').forEach(el => el.classList.remove('is-selected'));
+    }
+
+    function closeMainMenu(){
+      if (!mainMenuWrap) return;
+      mainMenuWrap.open = false;
+      if (mainMenuPanel) mainMenuPanel.setAttribute('aria-hidden', 'true');
+    }
+
+    function formatLogMonthTitle(yearMonth){
+      const raw = String(yearMonth || '').trim();
+      const m = raw.match(/^(\d{4})-(\d{2})$/);
+      if (!m) return raw || 'Mes actual';
+      const year = Number(m[1]);
+      const monthIndex = Number(m[2]) - 1;
+      const dt = new Date(year, monthIndex, 1);
+      if (Number.isNaN(dt.getTime())) return raw;
+      return dt.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' }).toUpperCase();
     }
 
     function renderEmptyDetail(){
@@ -2126,6 +2158,105 @@ async function refreshDesempenoPersonalDesempeno(){
 
       loadRendimientoLocales();
       }
+
+    function getCurrentLogMonth(){
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      return `${year}-${month}`;
+    }
+
+    function buildLogRowsHtml(entries){
+      if (!entries || !entries.length) {
+        return `<div class="kolrrhh-log-empty">No hay registros para este mes.</div>`;
+      }
+
+      return entries.map((entry) => {
+        const action = String(entry?.action || '').toUpperCase() || 'LOG';
+        const timestamp = String(entry?.timestamp || '—');
+        const user = String(entry?.user || '—');
+        const table = String(entry?.table || '—');
+        const details = JSON.stringify(entry?.details ?? {}, null, 2);
+
+        return `
+          <div class="kolrrhh-log-entry">
+            <div class="kolrrhh-log-meta">
+              <span class="kolrrhh-log-pill">${escapeHtml(action)}</span>
+              <span>${escapeHtml(timestamp)}</span>
+              <span>${escapeHtml(user)}</span>
+              <span class="kolrrhh-log-table">${escapeHtml(table)}</span>
+            </div>
+            <pre class="kolrrhh-log-pre">${escapeHtml(details)}</pre>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function loadLogEntries(month){
+      const fd = new FormData();
+      fd.append('action', 'kol_rrhh_view_log');
+      fd.append('nonce', AJAX_NONCE);
+      fd.append('month', String(month || getCurrentLogMonth()));
+
+      const res = await fetch(AJAX_URL, {
+        method: 'POST',
+        body: fd,
+        credentials: 'same-origin'
+      });
+      const json = await res.json();
+      if (!json || json.success !== true) {
+        throw new Error(json?.data?.message || 'No se pudo cargar el log');
+      }
+      return {
+        month: String(json?.data?.month || month || getCurrentLogMonth()),
+        titleMonth: String(json?.data?.title_month || formatLogMonthTitle(month)),
+        entries: Array.isArray(json?.data?.entries) ? json.data.entries : []
+      };
+    }
+
+    function renderLogPanel(month){
+      const el = qs('kolrrhh-detail');
+      if (!el) return;
+
+      const selectedMonth = String(month || getCurrentLogMonth());
+
+      el.innerHTML = `
+        <div class="kolrrhh-locales-head">
+          <div>
+            <div class="kolrrhh-locales-title">LOG DE ACTIVIDAD</div>
+            <div class="kolrrhh-locales-sub" id="kolrrhh-log-sub">Mes: ${escapeHtml(formatLogMonthTitle(selectedMonth))}</div>
+          </div>
+          <div class="kolrrhh-log-head-actions">
+            <input type="month" class="kolrrhh-modal-input kolrrhh-log-month-input" id="kolrrhh-log-month" value="${escapeHtml(selectedMonth)}" />
+            <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary kolrrhh-btn-small" id="kolrrhh-log-refresh">Ver</button>
+            <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary kolrrhh-btn-small" id="kolrrhh-log-back">Volver</button>
+          </div>
+        </div>
+        <div class="kolrrhh-locales-body">
+          <div class="kolrrhh-log-card" id="kolrrhh-log-content">
+            <div class="kolrrhh-log-empty">Cargando log...</div>
+          </div>
+        </div>
+      `;
+
+      loadLogEntries(selectedMonth)
+        .then(({ titleMonth, entries, month: loadedMonth }) => {
+          if (__VIEW_MODE__ !== 'log') return;
+          const content = qs('kolrrhh-log-content');
+          const sub = qs('kolrrhh-log-sub');
+          const input = qs('kolrrhh-log-month');
+          if (sub) sub.textContent = `Mes: ${titleMonth}`;
+          if (input && loadedMonth) input.value = loadedMonth;
+          if (!content) return;
+          content.innerHTML = buildLogRowsHtml(entries);
+        })
+        .catch((err) => {
+          if (__VIEW_MODE__ !== 'log') return;
+          const content = qs('kolrrhh-log-content');
+          if (!content) return;
+          content.innerHTML = `<div class="kolrrhh-log-empty">${escapeHtml(String(err?.message || 'Error al cargar el log.'))}</div>`;
+        });
+    }
 
     function getHistoryMonths2026(){
       return [
@@ -2441,6 +2572,7 @@ function normalizeMesLabel(value){
     if (localesBtn) {
       localesBtn.addEventListener('click', function(ev){
         ev.preventDefault();
+        closeMainMenu();
         __VIEW_MODE__ = 'locales';
         clearEmployeeSelection();
         toggleTabs(false);
@@ -2451,6 +2583,7 @@ function normalizeMesLabel(value){
     if (historyBtn) {
       historyBtn.addEventListener('click', function(ev){
         ev.preventDefault();
+        closeMainMenu();
         __VIEW_MODE__ = 'history';
         clearEmployeeSelection();
         toggleTabs(false);
@@ -2458,6 +2591,23 @@ function normalizeMesLabel(value){
       });
     }
 
+
+    if (logBtn) {
+      logBtn.addEventListener('click', function(ev){
+        ev.preventDefault();
+        closeMainMenu();
+        __VIEW_MODE__ = 'log';
+        clearEmployeeSelection();
+        toggleTabs(false);
+        renderLogPanel();
+      });
+    }
+
+    document.addEventListener('click', function(ev){
+      const menuItem = ev.target.closest('.kolrrhh-menu-panel .kolrrhh-menu-item');
+      if (!menuItem) return;
+      closeMainMenu();
+    });
     // Volver desde el panel de locales
     document.addEventListener('click', function(ev){
       const back = ev.target.closest('#kolrrhh-locales-back');
@@ -2478,6 +2628,24 @@ function normalizeMesLabel(value){
       renderEmptyDetail();
     });
 
+
+    document.addEventListener('click', function(ev){
+      const back = ev.target.closest('#kolrrhh-log-back');
+      if (!back) return;
+      ev.preventDefault();
+      __VIEW_MODE__ = 'employees';
+      toggleTabs(true);
+      renderEmptyDetail();
+    });
+
+    document.addEventListener('click', function(ev){
+      const refresh = ev.target.closest('#kolrrhh-log-refresh');
+      if (!refresh) return;
+      ev.preventDefault();
+      if (__VIEW_MODE__ !== 'log') return;
+      const monthInput = qs('kolrrhh-log-month');
+      renderLogPanel(monthInput?.value || getCurrentLogMonth());
+    });
     // Editar rendimiento por local
     document.addEventListener('click', function(ev){
       const editBtn = ev.target.closest('.kolrrhh-locales-edit');
