@@ -30,6 +30,9 @@ final class KOL_RRHH_Plugin {
     add_action('wp_ajax_kol_rrhh_get_base', [$this,'ajax_get_base']);
     add_action('wp_ajax_kol_rrhh_get_comision', [$this,'ajax_get_comision']);
     add_action('wp_ajax_kol_rrhh_view_log', [$this,'ajax_view_log']);
+    add_action('wp_ajax_kol_rrhh_view_editable_status', [$this,'ajax_view_editable_status']);
+    add_action('wp_ajax_kol_rrhh_get_editable_status', [$this,'ajax_get_editable_status']);
+    add_action('wp_ajax_kol_rrhh_toggle_editable_status', [$this,'ajax_toggle_editable_status']);
     add_shortcode(self::SHORTCODE, [$this,'shortcode']);
   }
 
@@ -311,6 +314,318 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
     exit;
   }
 
+  public function ajax_view_editable_status(){
+    if (!$this->has_plugin_access()) wp_die('No tenes acceso a este modulo.');
+    if (!isset($_GET['nonce']) || !wp_verify_nonce($_GET['nonce'], 'kol_rrhh_nonce')) wp_die('Nonce invalido');
+
+    global $wpdb;
+    $table = $wpdb->prefix . 'kol_rrhh_items_sueldos_editables';
+    $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table));
+    if ($exists !== $table) wp_die('La tabla de estados de edicion no existe.');
+
+    $cols = $wpdb->get_col("SHOW COLUMNS FROM {$table}", 0);
+    $cols = is_array($cols) ? $cols : [];
+
+    $colAnio = '';
+    foreach (['anio', 'ano', 'año'] as $c) {
+      if (in_array($c, $cols, true)) { $colAnio = $c; break; }
+    }
+    $colMes = '';
+    foreach (['mes', 'month'] as $c) {
+      if (in_array($c, $cols, true)) { $colMes = $c; break; }
+    }
+    $colEditable = '';
+    foreach (['editable', 'editado', 'abierto'] as $c) {
+      if (in_array($c, $cols, true)) { $colEditable = $c; break; }
+    }
+
+    if (!$colAnio || !$colMes || !$colEditable) {
+      wp_die('No se pudieron detectar las columnas necesarias en la tabla.');
+    }
+
+    $rows = $wpdb->get_results("SELECT {$colAnio} AS anio, {$colMes} AS mes, {$colEditable} AS editable FROM {$table} ORDER BY {$colAnio} DESC, {$colMes} DESC", ARRAY_A) ?: [];
+    $groupedRows = [];
+    foreach ($rows as $row) {
+      $anio = (string)($row['anio'] ?? '');
+      if ($anio === '') $anio = 'Sin ano';
+      if (!isset($groupedRows[$anio])) $groupedRows[$anio] = [];
+      $groupedRows[$anio][] = $row;
+    }
+
+    header('Content-Type: text/html; charset=UTF-8');
+    ?>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Bloquear Edicion</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 0; background: #f5f7f8; color:#111; }
+    .wrap { max-width: 860px; margin: 0 auto; padding: 24px; }
+    .head { margin-bottom: 18px; }
+    .title { margin: 0 0 6px; font-size: 28px; font-weight: 900; }
+    .sub { color: #666; font-size: 14px; }
+    .card { background: #fff; border: 1px solid rgba(0,0,0,.08); border-radius: 18px; box-shadow: 0 16px 30px rgba(0,0,0,.06); overflow: hidden; }
+    .year + .year { border-top: 1px solid rgba(0,0,0,.08); }
+    .year-head { padding: 16px 18px 10px; font-size: 18px; font-weight: 900; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 14px 16px; border-bottom: 1px solid rgba(0,0,0,.08); text-align: left; }
+    th { background: #f8fafb; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #555; }
+    td { font-size: 14px; }
+    .status-open { color: #0b3d1e; font-weight: 800; }
+    .status-closed { color: #8a1c1c; font-weight: 800; }
+    .action-cell { width: 180px; }
+    .toggle-btn { border: 0; border-radius: 999px; padding: 10px 14px; font-size: 12px; font-weight: 800; cursor: pointer; color: #fff; }
+    .toggle-btn.is-open { background: #8a1c1c; }
+    .toggle-btn.is-closed { background: #13804a; }
+    .toggle-btn[disabled] { opacity: .6; cursor: wait; }
+    .empty { padding: 28px; text-align:center; color:#666; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <h1 class="title">Bloquear Edicion</h1>
+      <div class="sub">Estado de edicion por periodo, ordenado del mas nuevo al mas viejo.</div>
+    </div>
+    <div class="card">
+      <?php if (empty($groupedRows)): ?>
+        <div class="empty">No hay registros para mostrar.</div>
+      <?php else: ?>
+        <?php foreach ($groupedRows as $anio => $yearRows): ?>
+          <div class="year">
+            <div class="year-head"><?php echo esc_html($anio); ?></div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Mes</th>
+                  <th>Editable</th>
+                  <th>Accion</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php foreach ($yearRows as $row): ?>
+                  <?php
+                    $editable = intval($row['editable'] ?? 0);
+                    $estado = $editable === 0 ? 'Bloqueado' : 'Abierto';
+                    $statusClass = $editable === 0 ? 'status-closed' : 'status-open';
+                    $mesRaw = (string)($row['mes'] ?? '');
+                    $mesLabel = $mesRaw;
+                    if (preg_match('/^\d{1,2}$/', $mesRaw)) {
+                      $mesNum = intval($mesRaw);
+                      if ($mesNum >= 1 && $mesNum <= 12) {
+                        $mesLabel = strtoupper(date_i18n('F', mktime(0, 0, 0, $mesNum, 1, 2026)));
+                      }
+                    }
+                    $nextEditable = $editable === 0 ? 1 : 0;
+                    $actionLabel = $editable === 0 ? 'Abrir edicion' : 'Bloquear edicion';
+                  ?>
+                  <tr>
+                    <td><?php echo esc_html($mesLabel); ?></td>
+                    <td class="<?php echo esc_attr($statusClass); ?>"><?php echo esc_html($estado); ?></td>
+                    <td class="action-cell">
+                      <button
+                        type="button"
+                        class="toggle-btn <?php echo esc_attr($editable === 0 ? 'is-closed' : 'is-open'); ?>"
+                        data-editable-toggle="1"
+                        data-anio="<?php echo esc_attr((string)$anio); ?>"
+                        data-mes="<?php echo esc_attr($mesRaw); ?>"
+                        data-mes-label="<?php echo esc_attr($mesLabel); ?>"
+                        data-next="<?php echo esc_attr((string)$nextEditable); ?>"
+                      ><?php echo esc_html($actionLabel); ?></button>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        <?php endforeach; ?>
+      <?php endif; ?>
+    </div>
+  </div>
+  <script>
+    document.addEventListener('click', async function(ev){
+      const btn = ev.target.closest('[data-editable-toggle="1"]');
+      if (!btn) return;
+
+      const anio = btn.getAttribute('data-anio') || '';
+      const mes = btn.getAttribute('data-mes') || '';
+      const mesLabel = btn.getAttribute('data-mes-label') || mes;
+      const next = btn.getAttribute('data-next') || '0';
+      const ok = window.confirm("Esta por cambiar el estado de todos los item del sueldo de '" + mesLabel + "'.");
+      if (!ok) return;
+
+      btn.disabled = true;
+      const fd = new FormData();
+      fd.append('action', 'kol_rrhh_toggle_editable_status');
+      fd.append('nonce', <?php echo wp_json_encode(wp_create_nonce('kol_rrhh_nonce')); ?>);
+      fd.append('anio', anio);
+      fd.append('mes', mes);
+      fd.append('editable', next);
+
+      try {
+        const res = await fetch(<?php echo wp_json_encode(admin_url('admin-ajax.php')); ?>, {
+          method: 'POST',
+          body: fd,
+          credentials: 'same-origin'
+        });
+        const json = await res.json();
+        if (!json || json.success !== true) {
+          throw new Error((json && json.data && json.data.message) ? json.data.message : 'No se pudo actualizar.');
+        }
+        window.location.reload();
+      } catch (err) {
+        window.alert(err && err.message ? err.message : 'No se pudo actualizar.');
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
+<?php
+    exit;
+  }
+
+  public function ajax_get_editable_status(){
+    check_ajax_referer('kol_rrhh_nonce', 'nonce');
+    $this->ajax_require_plugin_access();
+
+    global $wpdb;
+    $table = $wpdb->prefix . 'kol_rrhh_items_sueldos_editables';
+    $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table));
+    if ($exists !== $table) {
+      wp_send_json_error(['message' => 'La tabla de estados de edicion no existe.']);
+    }
+
+    $cols = $wpdb->get_col("SHOW COLUMNS FROM {$table}", 0);
+    $cols = is_array($cols) ? $cols : [];
+
+    $colAnio = '';
+    foreach (['anio', 'ano', 'aÇño'] as $c) {
+      if (in_array($c, $cols, true)) { $colAnio = $c; break; }
+    }
+    $colMes = '';
+    foreach (['mes', 'month'] as $c) {
+      if (in_array($c, $cols, true)) { $colMes = $c; break; }
+    }
+    $colEditable = '';
+    foreach (['editable', 'editado', 'abierto'] as $c) {
+      if (in_array($c, $cols, true)) { $colEditable = $c; break; }
+    }
+
+    if (!$colAnio || !$colMes || !$colEditable) {
+      wp_send_json_error(['message' => 'No se pudieron detectar las columnas necesarias en la tabla.']);
+    }
+
+    $rows = $wpdb->get_results("SELECT {$colAnio} AS anio, {$colMes} AS mes, {$colEditable} AS editable FROM {$table} ORDER BY {$colAnio} DESC, {$colMes} DESC", ARRAY_A) ?: [];
+    wp_send_json_success(['rows' => $rows]);
+  }
+
+  public function ajax_toggle_editable_status(){
+    check_ajax_referer('kol_rrhh_nonce', 'nonce');
+    $this->ajax_require_plugin_access();
+
+    $anio = isset($_POST['anio']) ? intval($_POST['anio']) : 0;
+    $mesRaw = isset($_POST['mes']) ? sanitize_text_field(wp_unslash($_POST['mes'])) : '';
+    $editable = isset($_POST['editable']) ? intval($_POST['editable']) : 0;
+
+    if ($anio <= 0 || $mesRaw === '') {
+      wp_send_json_error(['message' => 'Datos invalidos.']);
+    }
+
+    global $wpdb;
+    $table = $wpdb->prefix . 'kol_rrhh_items_sueldos_editables';
+    $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table));
+    if ($exists !== $table) {
+      wp_send_json_error(['message' => 'La tabla de estados de edicion no existe.']);
+    }
+
+    $cols = $wpdb->get_col("SHOW COLUMNS FROM {$table}", 0);
+    $cols = is_array($cols) ? $cols : [];
+
+    $colAnio = '';
+    foreach (['anio', 'ano', 'aÇño'] as $c) {
+      if (in_array($c, $cols, true)) { $colAnio = $c; break; }
+    }
+    $colMes = '';
+    foreach (['mes', 'month'] as $c) {
+      if (in_array($c, $cols, true)) { $colMes = $c; break; }
+    }
+    $colEditable = '';
+    foreach (['editable', 'editado', 'abierto'] as $c) {
+      if (in_array($c, $cols, true)) { $colEditable = $c; break; }
+    }
+
+    if (!$colAnio || !$colMes || !$colEditable) {
+      wp_send_json_error(['message' => 'No se pudieron detectar las columnas necesarias en la tabla.']);
+    }
+
+    $before = $wpdb->get_results($wpdb->prepare(
+      "SELECT {$colAnio} AS anio, {$colMes} AS mes, {$colEditable} AS editable FROM {$table} WHERE {$colAnio} = %d AND {$colMes} = %s",
+      $anio,
+      $mesRaw
+    ), ARRAY_A);
+
+    $ok = $wpdb->update(
+      $table,
+      [$colEditable => $editable],
+      [$colAnio => $anio, $colMes => $mesRaw],
+      ['%d'],
+      ['%d', '%s']
+    );
+
+    if ($ok === false) {
+      wp_send_json_error(['message' => 'No se pudo actualizar el estado.']);
+    }
+
+    $after = $wpdb->get_results($wpdb->prepare(
+      "SELECT {$colAnio} AS anio, {$colMes} AS mes, {$colEditable} AS editable FROM {$table} WHERE {$colAnio} = %d AND {$colMes} = %s",
+      $anio,
+      $mesRaw
+    ), ARRAY_A);
+
+    $itemsTable = $this->sueldos_items_table();
+    $itemsExists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $itemsTable));
+    $itemsUpdated = null;
+    $itemsBefore = [];
+    $itemsAfter = [];
+    if ($itemsExists === $itemsTable) {
+      $monthNum = intval($mesRaw);
+      $monthKey = preg_match('/^\d{4}-\d{2}$/', $mesRaw) ? substr($mesRaw, 5, 2) : str_pad((string)$monthNum, 2, '0', STR_PAD_LEFT);
+      if (preg_match('/^\d{2}$/', $monthKey)) {
+        $periodPrefix = sprintf('%04d-%s-', $anio, $monthKey);
+        $itemsBefore = $wpdb->get_results($wpdb->prepare(
+          "SELECT id, legajo, periodo_inicio, periodo_fin, editable FROM {$itemsTable} WHERE periodo_inicio LIKE %s",
+          $periodPrefix . '%'
+        ), ARRAY_A) ?: [];
+
+        $itemsUpdated = $wpdb->query($wpdb->prepare(
+          "UPDATE {$itemsTable} SET editable = %d WHERE periodo_inicio LIKE %s",
+          $editable,
+          $periodPrefix . '%'
+        ));
+
+        $itemsAfter = $wpdb->get_results($wpdb->prepare(
+          "SELECT id, legajo, periodo_inicio, periodo_fin, editable FROM {$itemsTable} WHERE periodo_inicio LIKE %s",
+          $periodPrefix . '%'
+        ), ARRAY_A) ?: [];
+      }
+    }
+
+    $this->audit_log('update', $table, [
+      'scope' => ['anio' => $anio, 'mes' => $mesRaw],
+      'before' => $before,
+      'after' => $after,
+      'items_sueldos' => [
+        'updated_rows' => $itemsUpdated,
+        'before' => $itemsBefore,
+        'after' => $itemsAfter,
+      ],
+    ]);
+
+    wp_send_json_success(['updated' => 1, 'items_updated' => $itemsUpdated]);
+  }
+
   private function render_access_denied_notice(){
     return '<div class="kolrrhh-no-access">No tenés acceso a este módulo. Solicitá acceso a administración.</div>';
   }
@@ -386,10 +701,11 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
                   </svg>
                 </summary>
                 <div class="kolrrhh-menu-panel" id="kolrrhh-main-menu" role="menu" aria-hidden="true">
-                  <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-history" role="menuitem">Historial</button>
-                  <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-locales" role="menuitem">Locales</button>
-                  <a class="kolrrhh-menu-item" href="<?php echo esc_url($log_url); ?>" target="_blank" rel="noopener noreferrer" role="menuitem">Log</a>
-                  <button type="button" class="kolrrhh-menu-item" id="kolrrhh-add" role="menuitem">Agregar personal</button>
+                  <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-history" role="menuitem">HISTORIAL</button>
+                  <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-locales" role="menuitem">LOCALES</button>
+                  <a class="kolrrhh-menu-item" href="<?php echo esc_url($log_url); ?>" target="_blank" rel="noopener noreferrer" role="menuitem">LOG</a>
+                  <button type="button" class="kolrrhh-menu-item" id="kolrrhh-add" role="menuitem">AGREGAR PERSONAL</button>
+                  <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-editable-status" role="menuitem">BLOQUEAR EDICION</button>
                 </div>
               </details>
             </div>
@@ -1007,7 +1323,249 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
     </div>
   </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  const host = document.getElementById('kolrrhh-sueldo-items');
+  const editableMenuBtn = document.getElementById('kolrrhh-open-editable-status');
+  const detail = document.getElementById('kolrrhh-detail');
+  if (!host || typeof MutationObserver === 'undefined') return;
 
+  let paintTimer = null;
+  function hideTabsForCustomPanel(hide){
+    const tabs = document.querySelector('.kolrrhh-tabs');
+    const panes = document.querySelector('.kolrrhh-tabpanes');
+    if (tabs) tabs.classList.toggle('kolrrhh-hidden', !!hide);
+    if (panes) panes.classList.toggle('kolrrhh-hidden', !!hide);
+  }
+
+  function clearSelectedEmployees(){
+    document.querySelectorAll('.kolrrhh-item.is-selected').forEach(function(el){
+      el.classList.remove('is-selected');
+    });
+  }
+
+  function renderEmptyDetailPanel(){
+    if (!detail) return;
+    detail.innerHTML = `
+      <div class="kolrrhh-empty">
+        <div class="kolrrhh-empty-dot"></div>
+        <div>
+          <div class="kolrrhh-empty-h">Sin seleccion</div>
+          <div class="kolrrhh-empty-p">Hace click en un empleado para ver informacion.</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function monthLabel(value){
+    const raw = String(value || '').trim();
+    if (/^\d{1,2}$/.test(raw)) {
+      const monthNum = Number(raw);
+      const names = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+      return names[monthNum - 1] || raw;
+    }
+    return raw.toUpperCase();
+  }
+
+  function buildEditableStatusHtml(rows){
+    const grouped = {};
+    (rows || []).forEach(function(row){
+      const anio = String((row && row.anio) || 'Sin ano');
+      if (!grouped[anio]) grouped[anio] = [];
+      grouped[anio].push(row);
+    });
+
+    const groups = Object.keys(grouped).map(function(anio){
+      return { anio: anio, rows: grouped[anio] };
+    }).sort(function(a, b){
+      return Number(b.anio || 0) - Number(a.anio || 0);
+    });
+
+    if (!groups.length) {
+      return `<div class="kolrrhh-muted" style="padding:14px;">No hay registros para mostrar.</div>`;
+    }
+
+    return groups.map(function(group){
+      return `
+        <div class="kolrrhh-locales-block">
+          <div class="kolrrhh-locales-month">${group.anio}</div>
+          <div class="kolrrhh-tablewrap">
+            <table class="kolrrhh-table kolrrhh-locales-table">
+              <thead>
+                <tr>
+                  <th>MES</th>
+                  <th>EDITABLE</th>
+                  <th>ACCION</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${group.rows.map(function(row){
+                  const editable = Number((row && row.editable) || 0) === 1;
+                  const mesRaw = String((row && row.mes) || '');
+                  const mes = monthLabel(mesRaw);
+                  const estado = editable ? 'ABIERTO' : 'BLOQUEADO';
+                  const btnClass = editable ? 'is-open' : 'is-closed';
+                  const action = editable ? 'BLOQUEAR EDICION' : 'ABRIR EDICION';
+                  return `
+                    <tr>
+                      <td>${mes}</td>
+                      <td><span class="${editable ? 'status-open' : 'status-closed'}">${estado}</span></td>
+                      <td>
+                        <button
+                          type="button"
+                          class="toggle-btn ${btnClass}"
+                          data-editable-toggle-panel="1"
+                          data-anio="${String(group.anio).replace(/"/g, '&quot;')}"
+                          data-mes="${mesRaw.replace(/"/g, '&quot;')}"
+                          data-mes-label="${mes.replace(/"/g, '&quot;')}"
+                          data-next="${editable ? '0' : '1'}"
+                        >${action}</button>
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function openEditableStatusPanel(){
+    if (!detail || typeof KOL_RRHH === 'undefined') return;
+    hideTabsForCustomPanel(true);
+    clearSelectedEmployees();
+    detail.innerHTML = `
+      <div class="kolrrhh-locales-head">
+        <div>
+          <div class="kolrrhh-locales-title">BLOQUEAR EDICION</div>
+          <div class="kolrrhh-locales-sub">Estado de edicion por periodo.</div>
+        </div>
+        <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary kolrrhh-btn-small" id="kolrrhh-editable-back">Volver</button>
+      </div>
+      <div class="kolrrhh-locales-body">
+        <div class="kolrrhh-muted" style="padding:14px;">Cargando estados...</div>
+      </div>
+    `;
+
+    const fd = new FormData();
+    fd.append('action', 'kol_rrhh_get_editable_status');
+    fd.append('nonce', KOL_RRHH.nonce);
+
+    try {
+      const res = await fetch(KOL_RRHH.ajaxurl, {
+        method: 'POST',
+        body: fd,
+        credentials: 'same-origin'
+      });
+      const json = await res.json();
+      if (!json || json.success !== true) {
+        throw new Error((json && json.data && json.data.message) ? json.data.message : 'No se pudo cargar el estado de edicion.');
+      }
+      const body = detail.querySelector('.kolrrhh-locales-body');
+      if (!body) return;
+      body.innerHTML = buildEditableStatusHtml((json.data && json.data.rows) || []);
+    } catch (err) {
+      const body = detail.querySelector('.kolrrhh-locales-body');
+      if (!body) return;
+      body.innerHTML = `<div class="kolrrhh-muted" style="padding:14px;">${(err && err.message) ? err.message : 'No se pudo cargar el estado de edicion.'}</div>`;
+    }
+  }
+
+  async function paintEditableStates(){
+    const legajo = host.dataset.legajo || '';
+    const buttons = host.querySelectorAll('[data-sueldo-edit="1"]');
+    if (!legajo || !buttons.length || typeof KOL_RRHH === 'undefined') return;
+
+    const fd = new FormData();
+    fd.append('action', 'kol_rrhh_get_sueldo_items');
+    fd.append('nonce', KOL_RRHH.nonce);
+    fd.append('legajo', legajo);
+
+    try {
+      const res = await fetch(KOL_RRHH.ajaxurl, {
+        method: 'POST',
+        body: fd,
+        credentials: 'same-origin'
+      });
+      const json = await res.json();
+      if (!json || json.success !== true) return;
+      const rows = Array.isArray(json.data && json.data.rows) ? json.data.rows : [];
+      const byId = {};
+      rows.forEach(function(row){
+        byId[String(row.id || '')] = Number(row.editable || 0);
+      });
+
+      buttons.forEach(function(btn){
+        const id = String(btn.getAttribute('data-id') || '');
+        const editable = byId[id] === 1;
+        btn.classList.remove('kolrrhh-sueldo-editable-open', 'kolrrhh-sueldo-editable-closed');
+        btn.classList.add(editable ? 'kolrrhh-sueldo-editable-open' : 'kolrrhh-sueldo-editable-closed');
+      });
+    } catch (err) {}
+  }
+
+  const observer = new MutationObserver(function(){
+    if (paintTimer) window.clearTimeout(paintTimer);
+    paintTimer = window.setTimeout(paintEditableStates, 120);
+  });
+  observer.observe(host, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-legajo'] });
+  paintEditableStates();
+
+  if (editableMenuBtn) {
+    editableMenuBtn.addEventListener('click', function(ev){
+      ev.preventDefault();
+      openEditableStatusPanel();
+    });
+  }
+
+  document.addEventListener('click', function(ev){
+    const back = ev.target.closest('#kolrrhh-editable-back');
+    if (back) {
+      ev.preventDefault();
+      hideTabsForCustomPanel(false);
+      renderEmptyDetailPanel();
+      return;
+    }
+
+    const btn = ev.target.closest('[data-editable-toggle-panel="1"]');
+    if (!btn || typeof KOL_RRHH === 'undefined') return;
+
+    const anio = btn.getAttribute('data-anio') || '';
+    const mes = btn.getAttribute('data-mes') || '';
+    const mesLabel = btn.getAttribute('data-mes-label') || mes;
+    const next = btn.getAttribute('data-next') || '0';
+    const ok = window.confirm("Esta por cambiar el estado de todos los item del sueldo de '" + mesLabel + "'.");
+    if (!ok) return;
+
+    btn.disabled = true;
+    const fd = new FormData();
+    fd.append('action', 'kol_rrhh_toggle_editable_status');
+    fd.append('nonce', KOL_RRHH.nonce);
+    fd.append('anio', anio);
+    fd.append('mes', mes);
+    fd.append('editable', next);
+
+    fetch(KOL_RRHH.ajaxurl, {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin'
+    })
+    .then(function(res){ return res.json(); })
+    .then(function(json){
+      if (!json || json.success !== true) {
+        throw new Error((json && json.data && json.data.message) ? json.data.message : 'No se pudo actualizar.');
+      }
+      return openEditableStatusPanel();
+    })
+    .catch(function(err){
+      window.alert((err && err.message) ? err.message : 'No se pudo actualizar.');
+      btn.disabled = false;
+    });
+  });
+});
+</script>
 
 <?php
     return ob_get_clean();
@@ -1112,7 +1670,7 @@ public function ajax_get_sueldo_items(){
   $rows = $wpdb->get_results(
     $wpdb->prepare(
       "SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, area, rol, participacion, horas, tipo_liquidacion,
-              efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas
+              efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas, editable
        FROM {$table}
        WHERE legajo = %d
        ORDER BY periodo_inicio DESC, id DESC",
@@ -2011,10 +2569,10 @@ if (!$rol || !$area) {
 $formats = ['%d','%s','%s','%f','%s','%f','%s','%f','%s','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f'];
 
   if ($id > 0) {
-    $before = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $id), ARRAY_A);
+    $before = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas, editable FROM {$table} WHERE id = %d", $id), ARRAY_A);
     $ok = $wpdb->update($table, $data, ['id' => $id], $formats, ['%d']);
     if ($ok === false) wp_send_json_error(['message' => 'No se pudo actualizar']);
-    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $id), ARRAY_A);
+    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas, editable FROM {$table} WHERE id = %d", $id), ARRAY_A);
     if ((int)$ok > 0) {
       $this->audit_log('update', $table, [
         'id' => $id,
@@ -2027,7 +2585,7 @@ $formats = ['%d','%s','%s','%f','%s','%f','%s','%f','%s','%f','%f','%f','%f','%f
     $ok = $wpdb->insert($table, $data, $formats);
     if (!$ok) wp_send_json_error(['message' => 'No se pudo insertar']);
     $new_id = intval($wpdb->insert_id);
-    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas FROM {$table} WHERE id = %d", $new_id), ARRAY_A);
+    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas, editable FROM {$table} WHERE id = %d", $new_id), ARRAY_A);
     $this->audit_log('insert', $table, [
       'id' => $new_id,
       'row' => $row,

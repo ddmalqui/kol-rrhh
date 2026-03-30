@@ -1484,3 +1484,47 @@
   background: rgba(0,0,0,.03);
   opacity:.85;
 }
+.kolrrhh-sueldo-editable-open{
+  background: rgba(173, 224, 166, .45);
+  border: 1px solid rgba(112, 179, 101, .95);
+  color: #7b7b7b;
+}
+.kolrrhh-sueldo-editable-open:hover{
+  filter: brightness(0.98);
+}
+.kolrrhh-sueldo-editable-closed{
+  background: rgba(255, 232, 228, .92);
+  border: 1px solid rgba(255, 96, 96, .9);
+  color: #7b7b7b;
+}
+.kolrrhh-sueldo-editable-closed:hover{
+  filter: brightness(0.98);
+}
+
+.status-open{
+  color: #0b3d1e;
+  font-weight: 800;
+}
+.status-closed{
+  color: #8a1c1c;
+  font-weight: 800;
+}
+.toggle-btn{
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  color: #fff;
+}
+.toggle-btn.is-open{
+  background: #8a1c1c;
+}
+.toggle-btn.is-closed{
+  background: #13804a;
+}
+.toggle-btn[disabled]{
+  opacity: .6;
+  cursor: wait;
+}
