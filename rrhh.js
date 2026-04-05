@@ -1709,6 +1709,11 @@ async function refreshDesempenoPersonalDesempeno(){
       const isMonotributista = tipoRaw === 'monotributista';
       const tipoLabel = (tipoRaw === 'monotributista') ? 'MONOTRIBUTISTA' : 'EMPLEADO';
       const totalCobrar = Number(r.efectivo || 0) + Number(r.transferencia || 0) + Number(r.creditos || 0);
+      const mesCerrado = Number(r?.editable || 0) !== 1;
+      const blockedAttrs = mesCerrado
+        ? ' aria-disabled="true" title="El mes ya fue cerrado"'
+        : '';
+      const stateClass = mesCerrado ? 'kolrrhh-sueldo-editable-closed' : 'kolrrhh-sueldo-editable-open';
 
       return `
         <div class="kolrrhh-sueldo-card" data-sueldo-id="${r.id}">
@@ -1740,8 +1745,8 @@ async function refreshDesempenoPersonalDesempeno(){
             <div class="kolrrhh-sueldo-actions">
               <div class="kolrrhh-sueldo-item-total">${moneyAR(totalCobrar)}</div>
               <div class="kolrrhh-sueldo-actions-buttons">
-                <button type="button" class="kolrrhh-btn kolrrhh-btn-small" data-sueldo-edit="1" data-id="${r.id}">Editar</button>
-                <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary" data-sueldo-print="1" data-id="${r.id}">PDF</button>
+                <button type="button" class="kolrrhh-btn kolrrhh-btn-small ${stateClass}" data-sueldo-edit="1" data-id="${r.id}" data-mes-cerrado="${mesCerrado ? '1' : '0'}"${blockedAttrs}>Editar</button>
+                <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary ${stateClass}" data-sueldo-print="1" data-id="${r.id}" data-mes-cerrado="${mesCerrado ? '1' : '0'}"${blockedAttrs}>PDF</button>
               </div>
             </div>
           </div>
@@ -3026,10 +3031,18 @@ if (finSel) finSel.addEventListener('change', () => {
         if (!leg || !id) return;
 
         const row = (__LAST_SUELDO_ROWS__ || []).find(x => Number(x.id) === id);
+        if (row && Number(row?.editable || 0) !== 1) {
+          alert('El mes ya fue cerrado');
+          return;
+        }
         if (!row) {
           // fallback: recargamos y reintentamos una vez
           loadSueldoItemsForLegajo(leg).then(() => {
             const r2 = (__LAST_SUELDO_ROWS__ || []).find(x => Number(x.id) === id);
+            if (r2 && Number(r2?.editable || 0) !== 1) {
+              alert('El mes ya fue cerrado');
+              return;
+            }
             if (r2) openSueldoModal(r2, leg);
           });
           return;
@@ -3050,6 +3063,10 @@ if (finSel) finSel.addEventListener('change', () => {
         const rows = (__LAST_SUELDO_ROWS__ || []);
         const current = rows.find(x => Number(x.id) === id);
         if (!current) return;
+        if (Number(current?.editable || 0) !== 1) {
+          alert('El mes ya fue cerrado');
+          return;
+        }
 
         const mesKey = getPeriodoMesKey(current);
         const monthRows = mesKey ? rows.filter(x => getPeriodoMesKey(x) === mesKey) : [current];
