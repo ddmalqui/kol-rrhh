@@ -348,8 +348,26 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
 
     global $wpdb;
     $t_locales = $wpdb->prefix . 'kol_locales';
-    $t_ventas  = $wpdb->prefix . 'kol_rrhh_ventas_mensuales';
-    $t_rend    = $wpdb->prefix . 'kol_rrhh_desempeno_locales';
+    $t_ventas  = $wpdb->prefix . 'kol_ventas_mensuales';
+    $t_rend    = $wpdb->prefix . 'kol_rrhh_rendimiento_locales';
+
+    $exists_ventas = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $t_ventas));
+    if ($exists_ventas !== $t_ventas) {
+      $t_ventas_alt = $wpdb->prefix . 'kol_rrhh_ventas_mensuales';
+      $exists_ventas_alt = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $t_ventas_alt));
+      if ($exists_ventas_alt === $t_ventas_alt) {
+        $t_ventas = $t_ventas_alt;
+      }
+    }
+
+    $exists_rend = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $t_rend));
+    if ($exists_rend !== $t_rend) {
+      $t_rend_alt = $wpdb->prefix . 'kol_rrhh_desempeno_locales';
+      $exists_rend_alt = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $t_rend_alt));
+      if ($exists_rend_alt === $t_rend_alt) {
+        $t_rend = $t_rend_alt;
+      }
+    }
 
     foreach ([$t_locales, $t_ventas, $t_rend] as $t){
       $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $t));
@@ -363,19 +381,20 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
     $cols_v = $wpdb->get_col("SHOW COLUMNS FROM {$t_ventas}", 0) ?: [];
     $cols_r = $wpdb->get_col("SHOW COLUMNS FROM {$t_rend}", 0) ?: [];
 
-    $colLocId = '';
+    $colLocId = in_array('id', $cols_l, true) ? 'id' : '';
     foreach (['local_id','id_local','locales_id','id_locales','local'] as $c){
+      if ($colLocId !== '') break;
       if (in_array($c,$cols_l,true)) { $colLocId=$c; break; }
     }
     $colLocName = '';
-    foreach (['nombre','local','descripcion'] as $c){
+    foreach (['nombre','name','local','local_nombre','nombre_local','descripcion'] as $c){
       if (in_array($c,$cols_l,true)) { $colLocName=$c; break; }
     }
     $colVLocal = '';
-    foreach (['local_id','id_local','locales_id','id_locales','local'] as $c){
+    foreach (['local_id','local','id_local','locales_id','id_locales'] as $c){
       if (in_array($c,$cols_v,true)) { $colVLocal=$c; break; }
     }
-    $colVAnio = in_array('anio',$cols_v,true) ? 'anio' : '';
+    $colVAnio = in_array('anio',$cols_v,true) ? 'anio' : (in_array('aÃ±o',$cols_v,true) ? 'aÃ±o' : '');
     $colVMes  = in_array('mes',$cols_v,true) ? 'mes' : '';
     $colVVentas = '';
     foreach (['ventas','monto','importe','total'] as $c){
@@ -385,10 +404,10 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
     foreach (['local_id','id_local','locales_id','id_locales','local'] as $c){
       if (in_array($c,$cols_r,true)) { $colRLocal=$c; break; }
     }
-    $colRAnio = in_array('anio',$cols_r,true) ? 'anio' : '';
+    $colRAnio = in_array('anio',$cols_r,true) ? 'anio' : (in_array('aÃ±o',$cols_r,true) ? 'aÃ±o' : '');
     $colRMes  = in_array('mes',$cols_r,true) ? 'mes' : '';
     $colRendTotal = '';
-    foreach (['total_pct','rendimiento_total','total','rendimiento'] as $c){
+    foreach (['total_pct','total'] as $c){
       if (in_array($c,$cols_r,true)) { $colRendTotal=$c; break; }
     }
     $colRendComision = '';
@@ -433,6 +452,14 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
     ];
     $cache[$key] = $result;
     return $result;
+  }
+
+  private function kol_rrhh_get_comision_factor_by_area($area){
+    $area = trim((string)$area);
+    if ($area === '') return 0.0;
+    if ($area === 'Dep') return 0.009;
+    if (in_array($area, ['Local 15','Local 34','Local 55','Lujan','Osi','Sh','Sol','Stoto','Urb'], true)) return 0.01;
+    return 0.0;
   }
 
   private function kol_rrhh_get_desempeno_pct($legajo, $yearMonth){
@@ -510,12 +537,9 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
     $periodoRef = (string)($row['periodo_fin'] ?: ($row['periodo_inicio'] ?? ''));
     if (preg_match('/^(\d{4})-(\d{2})/', $periodoRef, $m)) {
       $area = (string)($row['area'] ?? '');
-      $locales = $this->register_assets_locales_list();
-      if (in_array($area, $locales, true)) {
+      $factor = $this->kol_rrhh_get_comision_factor_by_area($area);
+      if ($factor > 0) {
         $comisionData = $this->kol_rrhh_get_comision_rendimiento_data($area, (int)$m[1], (int)$m[2]);
-        $factor = 0.0;
-        if ($area === 'Dep') $factor = 0.009;
-        if (in_array($area, ['Local 15','Local 34','Local 55','Lujan','Osi','Sh','Sol','Stoto','Urb'], true)) $factor = 0.01;
         $comision = $comisionData['ventas'] * $comisionData['comision_coef'] * $factor * $participacion;
         $rendimiento = $comisionData['rendimiento_local'] * $participacion * 300000;
       }
@@ -544,11 +568,22 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
     static $locales = null;
     if (is_array($locales)) return $locales;
     global $wpdb;
-    $locales = $wpdb->get_col("
-      SELECT nombre
-      FROM wp_kol_locales
-      ORDER BY nombre
-    ");
+    $table = $wpdb->prefix . 'kol_locales';
+    $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table));
+    if ($exists !== $table) {
+      $locales = [];
+      return $locales;
+    }
+    $cols = $wpdb->get_col("SHOW COLUMNS FROM {$table}", 0) ?: [];
+    $colName = '';
+    foreach (['nombre','name','local','descripcion'] as $c){
+      if (in_array($c, $cols, true)) { $colName = $c; break; }
+    }
+    if ($colName === '') {
+      $locales = [];
+      return $locales;
+    }
+    $locales = $wpdb->get_col("SELECT {$colName} FROM {$table} ORDER BY {$colName}");
     return is_array($locales) ? $locales : [];
   }
 
