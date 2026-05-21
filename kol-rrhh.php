@@ -945,6 +945,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
     $itemsBefore = [];
     $itemsAfter = [];
     if ($itemsExists === $itemsTable) {
+      $this->ensure_sueldos_calculated_columns();
       $monthNum = intval($mesRaw);
       $monthKey = preg_match('/^\d{4}-\d{2}$/', $mesRaw) ? substr($mesRaw, 5, 2) : str_pad((string)$monthNum, 2, '0', STR_PAD_LEFT);
       if (preg_match('/^\d{2}$/', $monthKey)) {
@@ -953,6 +954,29 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
           "SELECT id, legajo, periodo_inicio, periodo_fin, editable FROM {$itemsTable} WHERE periodo_inicio LIKE %s",
           $periodPrefix . '%'
         ), ARRAY_A) ?: [];
+
+        if ($editable === 0) {
+          $snapshotRows = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$itemsTable} WHERE periodo_inicio LIKE %s",
+            $periodPrefix . '%'
+          ), ARRAY_A) ?: [];
+
+          foreach ($snapshotRows as $snapshotRow) {
+            $legajo = intval($snapshotRow['legajo'] ?? 0);
+            $employee = [];
+            if ($legajo > 0) {
+              $employee = $wpdb->get_row(
+                $wpdb->prepare(
+                  "SELECT legajo, vinculo_para_antiguedad FROM {$this->table_name()} WHERE legajo = %d LIMIT 1",
+                  $legajo
+                ),
+                ARRAY_A
+              ) ?: [];
+            }
+            $calc = $this->kol_rrhh_calculate_sueldo_breakdown($snapshotRow, $employee);
+            $this->persist_sueldo_breakdown_snapshot((int)($snapshotRow['id'] ?? 0), $calc);
+          }
+        }
 
         $itemsUpdated = $wpdb->query($wpdb->prepare(
           "UPDATE {$itemsTable} SET editable = %d WHERE periodo_inicio LIKE %s",
@@ -2000,6 +2024,133 @@ private function ensure_sueldos_participacion_decimal_column(){
   return (strpos($type_after, 'float') === 0 || strpos($type_after, 'double') === 0);
 }
 
+private function sueldo_calculated_fields(){
+  return ['base', 'antig', 'comision', 'desempeno_personal', 'rendimiento', 'no_rem'];
+}
+
+private function ensure_sueldos_calculated_columns(){
+  global $wpdb;
+  $table = $this->sueldos_items_table();
+
+  $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table));
+  if ($exists !== $table) {
+    return false;
+  }
+
+  $cols = $wpdb->get_col("SHOW COLUMNS FROM {$table}", 0);
+  $cols = is_array($cols) ? $cols : [];
+
+  $after = 'vac_no_tomadas';
+  foreach ($this->sueldo_calculated_fields() as $field) {
+    if (in_array($field, $cols, true)) {
+      $after = $field;
+      continue;
+    }
+
+    $wpdb->query("ALTER TABLE {$table} ADD COLUMN {$field} DECIMAL(14,2) NULL DEFAULT NULL AFTER {$after}");
+    $after = $field;
+    $cols[] = $field;
+  }
+
+  return true;
+}
+
+private function sueldo_has_stored_breakdown($row){
+  $row = is_array($row) ? $row : [];
+  foreach ($this->sueldo_calculated_fields() as $field) {
+    if (!array_key_exists($field, $row) || $row[$field] === null || $row[$field] === '') {
+      return false;
+    }
+  }
+  return true;
+}
+
+private function sueldo_stored_breakdown($row){
+  $out = [];
+  $row = is_array($row) ? $row : [];
+  foreach ($this->sueldo_calculated_fields() as $field) {
+    $out[$field] = $this->kol_rrhh_parse_decimal($row[$field] ?? 0);
+  }
+  return $out;
+}
+
+private function sueldo_breakdown_for_display($row, $employee = []){
+  $row = is_array($row) ? $row : [];
+  $editable = intval($row['editable'] ?? 1);
+  if ($editable !== 1 && $this->sueldo_has_stored_breakdown($row)) {
+    return $this->sueldo_stored_breakdown($row);
+  }
+  return $this->kol_rrhh_calculate_sueldo_breakdown($row, $employee);
+}
+
+private function persist_sueldo_breakdown_snapshot($id, $calc){
+  $id = intval($id);
+  if ($id <= 0 || !is_array($calc)) return false;
+
+  global $wpdb;
+  $table = $this->sueldos_items_table();
+  $data = [];
+  $formats = [];
+  foreach ($this->sueldo_calculated_fields() as $field) {
+    $data[$field] = $this->kol_rrhh_parse_decimal($calc[$field] ?? 0);
+    $formats[] = '%f';
+  }
+
+  return $wpdb->update($table, $data, ['id' => $id], $formats, ['%d']);
+}
+
+private function sueldo_period_editable_status($periodIso){
+  $periodIso = trim((string)$periodIso);
+  if (!preg_match('/^(\d{4})-(\d{2})-\d{2}$/', $periodIso, $m)) {
+    return null;
+  }
+
+  global $wpdb;
+  $table = $wpdb->prefix . 'kol_rrhh_items_sueldos_editables';
+  $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table));
+  if ($exists !== $table) {
+    return null;
+  }
+
+  $cols = $wpdb->get_col("SHOW COLUMNS FROM {$table}", 0);
+  $cols = is_array($cols) ? $cols : [];
+
+  $colAnio = '';
+  foreach (['anio', 'ano', 'aÃ±o'] as $c) {
+    if (in_array($c, $cols, true)) { $colAnio = $c; break; }
+  }
+  $colMes = '';
+  foreach (['mes', 'month'] as $c) {
+    if (in_array($c, $cols, true)) { $colMes = $c; break; }
+  }
+  $colEditable = '';
+  foreach (['editable', 'editado', 'abierto'] as $c) {
+    if (in_array($c, $cols, true)) { $colEditable = $c; break; }
+  }
+
+  if (!$colAnio || !$colMes || !$colEditable) {
+    return null;
+  }
+
+  $anio = intval($m[1]);
+  $mesNum = intval($m[2]);
+  $mesPadded = str_pad((string)$mesNum, 2, '0', STR_PAD_LEFT);
+  $candidates = array_values(array_unique([(string)$mesNum, $mesPadded, $m[1] . '-' . $mesPadded]));
+
+  foreach ($candidates as $mes) {
+    $val = $wpdb->get_var($wpdb->prepare(
+      "SELECT {$colEditable} FROM {$table} WHERE {$colAnio} = %d AND {$colMes} = %s LIMIT 1",
+      $anio,
+      $mes
+    ));
+    if ($val !== null) {
+      return intval($val);
+    }
+  }
+
+  return null;
+}
+
 public function ajax_get_sueldo_items(){
   if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
     wp_send_json_error(['message' => 'Nonce inválido']);
@@ -2020,11 +2171,13 @@ public function ajax_get_sueldo_items(){
 
   $this->ensure_sueldos_tipo_liquidacion_column();
   $this->ensure_sueldos_participacion_decimal_column();
+  $this->ensure_sueldos_calculated_columns();
 
   $rows = $wpdb->get_results(
     $wpdb->prepare(
       "SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, area, rol, participacion, horas, tipo_liquidacion,
-              efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas, editable
+              efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas,
+              base, antig, comision, desempeno_personal, rendimiento, no_rem, editable
        FROM {$table}
        WHERE legajo = %d
        ORDER BY periodo_inicio DESC, id DESC",
@@ -2043,7 +2196,10 @@ public function ajax_get_sueldo_items(){
 
   if (!empty($rows)) {
     foreach ($rows as &$row) {
-      $calc = $this->kol_rrhh_calculate_sueldo_breakdown($row, $employee ?: []);
+      $calc = $this->sueldo_breakdown_for_display($row, $employee ?: []);
+      if (intval($row['editable'] ?? 1) !== 1 && !$this->sueldo_has_stored_breakdown($row)) {
+        $this->persist_sueldo_breakdown_snapshot((int)($row['id'] ?? 0), $calc);
+      }
       foreach ($calc as $calcKey => $calcValue) {
         $row[$calcKey] = $calcValue;
       }
@@ -2768,6 +2924,10 @@ public function ajax_delete_sueldo_item(){
   }
 
   $before = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $id), ARRAY_A);
+  if ($before && intval($before['editable'] ?? 1) !== 1) {
+    wp_send_json_error(['message' => 'El mes ya fue cerrado']);
+  }
+
   $ok = $wpdb->delete($table, ['id' => $id], ['%d']);
   if ($ok === false) {
     wp_send_json_error(['message' => 'No se pudo eliminar']);
@@ -2916,6 +3076,27 @@ if (!$rol || !$area) {
 
   $this->ensure_sueldos_tipo_liquidacion_column();
   $this->ensure_sueldos_participacion_decimal_column();
+  $this->ensure_sueldos_calculated_columns();
+
+  if ($id > 0) {
+    $existingEditable = $wpdb->get_var($wpdb->prepare("SELECT editable FROM {$table} WHERE id = %d", $id));
+    if ($existingEditable !== null && intval($existingEditable) !== 1) {
+      wp_send_json_error(['message' => 'El mes ya fue cerrado']);
+    }
+  }
+
+  $targetPeriodEditable = $this->sueldo_period_editable_status($periodo_inicio);
+  if ($targetPeriodEditable !== null && intval($targetPeriodEditable) !== 1) {
+    wp_send_json_error(['message' => 'El mes ya fue cerrado']);
+  }
+
+  $employee = $wpdb->get_row(
+    $wpdb->prepare(
+      "SELECT legajo, vinculo_para_antiguedad FROM {$this->table_name()} WHERE legajo = %d LIMIT 1",
+      $legajo
+    ),
+    ARRAY_A
+  ) ?: [];
 
   $data = [
     'legajo' => $legajo,
@@ -2938,13 +3119,17 @@ if (!$rol || !$area) {
     'liquidacion' => $liquidacion,
     'vac_no_tomadas' => $vac_no_tomadas
   ];
-$formats = ['%d','%s','%s','%f','%s','%f','%s','%f','%s','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f'];
+  $calc = $this->kol_rrhh_calculate_sueldo_breakdown($data, $employee);
+  foreach ($this->sueldo_calculated_fields() as $field) {
+    $data[$field] = $this->kol_rrhh_parse_decimal($calc[$field] ?? 0);
+  }
+$formats = ['%d','%s','%s','%f','%s','%f','%s','%f','%s','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f'];
 
   if ($id > 0) {
-    $before = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas, editable FROM {$table} WHERE id = %d", $id), ARRAY_A);
+    $before = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas, base, antig, comision, desempeno_personal, rendimiento, no_rem, editable FROM {$table} WHERE id = %d", $id), ARRAY_A);
     $ok = $wpdb->update($table, $data, ['id' => $id], $formats, ['%d']);
     if ($ok === false) wp_send_json_error(['message' => 'No se pudo actualizar']);
-    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas, editable FROM {$table} WHERE id = %d", $id), ARRAY_A);
+    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas, base, antig, comision, desempeno_personal, rendimiento, no_rem, editable FROM {$table} WHERE id = %d", $id), ARRAY_A);
     if ((int)$ok > 0) {
       $this->audit_log('update', $table, [
         'id' => $id,
@@ -2957,7 +3142,7 @@ $formats = ['%d','%s','%s','%f','%s','%f','%s','%f','%s','%f','%f','%f','%f','%f
     $ok = $wpdb->insert($table, $data, $formats);
     if (!$ok) wp_send_json_error(['message' => 'No se pudo insertar']);
     $new_id = intval($wpdb->insert_id);
-    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas, editable FROM {$table} WHERE id = %d", $new_id), ARRAY_A);
+    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas, base, antig, comision, desempeno_personal, rendimiento, no_rem, editable FROM {$table} WHERE id = %d", $new_id), ARRAY_A);
     $this->audit_log('insert', $table, [
       'id' => $new_id,
       'row' => $row,
@@ -3626,6 +3811,7 @@ $dayKey = $this->fmt_day_key($inDt);
 
   global $wpdb;
   $table = $this->sueldos_items_table();
+  $this->ensure_sueldos_calculated_columns();
 
   $placeholders = implode(',', array_fill(0, count($ids), '%d'));
   $sql = "SELECT * FROM {$table} WHERE id IN ({$placeholders}) ORDER BY periodo_inicio ASC, periodo_fin ASC, id ASC";
@@ -3663,7 +3849,10 @@ $dayKey = $this->fmt_day_key($inDt);
     $transfer = (float)($row['transferencia'] ?? 0);
     $creditos = (float)($row['creditos'] ?? 0);
     $total_pago = $efectivo + $transfer + $creditos;
-    $calc = $this->kol_rrhh_calculate_sueldo_breakdown($row, $emp);
+    $calc = $this->sueldo_breakdown_for_display($row, $emp);
+    if (intval($row['editable'] ?? 1) !== 1 && !$this->sueldo_has_stored_breakdown($row)) {
+      $this->persist_sueldo_breakdown_snapshot((int)($row['id'] ?? 0), $calc);
+    }
 
     $items[] = [
       'nombre' => $emp['nombre'] ?? '—',
