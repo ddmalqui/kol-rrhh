@@ -163,6 +163,13 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
     return in_array($email, $this->allowed_access_emails(), true);
   }
 
+  private function can_manage_editable_status(){
+    if (!is_user_logged_in()) return false;
+    $user = wp_get_current_user();
+    $login = strtolower(trim((string)($user->user_login ?? '')));
+    return $login === 'ddmalqui';
+  }
+
   private function ajax_require_plugin_access(){
     if (!$this->has_plugin_access()) {
       wp_send_json_error([
@@ -671,6 +678,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
 
   public function ajax_view_editable_status(){
     if (!$this->has_plugin_access()) wp_die('No tenes acceso a este modulo.');
+    if (!$this->can_manage_editable_status()) wp_die('No tenes permiso para abrir o bloquear la edicion.');
     if (!isset($_GET['nonce']) || !wp_verify_nonce($_GET['nonce'], 'kol_rrhh_nonce')) wp_die('Nonce invalido');
 
     global $wpdb;
@@ -844,6 +852,9 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
   public function ajax_get_editable_status(){
     check_ajax_referer('kol_rrhh_nonce', 'nonce');
     $this->ajax_require_plugin_access();
+    if (!$this->can_manage_editable_status()) {
+      wp_send_json_error(['message' => 'No tenes permiso para abrir o bloquear la edicion.']);
+    }
 
     global $wpdb;
     $table = $wpdb->prefix . 'kol_rrhh_items_sueldos_editables';
@@ -879,6 +890,9 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
   public function ajax_toggle_editable_status(){
     check_ajax_referer('kol_rrhh_nonce', 'nonce');
     $this->ajax_require_plugin_access();
+    if (!$this->can_manage_editable_status()) {
+      wp_send_json_error(['message' => 'No tenes permiso para abrir o bloquear la edicion.']);
+    }
 
     $anio = isset($_POST['anio']) ? intval($_POST['anio']) : 0;
     $mesRaw = isset($_POST['mes']) ? sanitize_text_field(wp_unslash($_POST['mes'])) : '';
@@ -1083,7 +1097,9 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
                   <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-locales" role="menuitem">LOCALES</button>
                   <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-log" role="menuitem">LOG</button>
                   <button type="button" class="kolrrhh-menu-item" id="kolrrhh-add" role="menuitem">AGREGAR PERSONAL</button>
-                  <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-editable-status" role="menuitem">BLOQUEAR EDICION</button>
+                  <?php if ($this->can_manage_editable_status()): ?>
+                    <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-editable-status" role="menuitem">BLOQUEAR EDICION</button>
+                  <?php endif; ?>
                 </div>
               </details>
             </div>
