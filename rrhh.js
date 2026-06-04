@@ -13,7 +13,7 @@
   let __CURRENT_LEGAJO__ = 0;
   let __CURRENT_CLOVER_ID__ = '';
   let __CURRENT_CLOVER_PAIRS__ = [];
-  let __VIEW_MODE__ = 'employees'; // employees | locales | history | log
+  let __VIEW_MODE__ = 'employees'; // employees | locales | history | mensualLocal | log
   let __CURRENT_ULTIMO_INGRESO__ = '';
   let __CURRENT_VINCULO_ANTIG__ = '';
   let __CURRENT_BASE__ = 0;
@@ -2089,6 +2089,7 @@ async function refreshDesempenoPersonalDesempeno(){
     // === LOCALES: bot√≥n en el header izquierdo ===
     const localesBtn = qs('kolrrhh-open-locales');
     const historyBtn = qs('kolrrhh-open-history');
+    const mensualLocalBtn = qs('kolrrhh-open-mensual-local');
     const logBtn = qs('kolrrhh-open-log');
     const mainMenuWrap = qs('kolrrhh-main-menu-wrap');
     const mainMenuPanel = qs('kolrrhh-main-menu');
@@ -2383,7 +2384,121 @@ function renderHistoryPanel(){
       body.innerHTML = `<tr><td class="kolrrhh-history-empty" colspan="${months.length + 1}">${escapeHtml(String(err?.message || 'Error al cargar historial.'))}</td></tr>`;
     });
 }
-function normalizeMesLabel(value){
+function buildMensualLocalTableHtml(rows, total){
+  return `
+    <div class="kolrrhh-tablewrap kolrrhh-history-wrap kolrrhh-mensual-local-wrap">
+      <table class="kolrrhh-table kolrrhh-history-table kolrrhh-mensual-local-table">
+        <thead>
+          <tr>
+            <th>Nombre del personal</th>
+            <th>Monto</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(row => `
+            <tr>
+              <td class="kolrrhh-mensual-local-person">
+                <div class="kolrrhh-history-person-name">${escapeHtml(String(row?.nombre || 'ó'))}</div>
+                <div class="kolrrhh-history-person-sub">Legajo ${escapeHtml(String(row?.legajo || 'ó'))}</div>
+              </td>
+              <td class="kolrrhh-history-cell kolrrhh-mensual-local-money">${escapeHtml(moneyAR(row?.monto || 0))}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+        <tfoot>
+          <tr>
+            <th>Total</th>
+            <th class="kolrrhh-mensual-local-total">${escapeHtml(moneyAR(total || 0))}</th>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  `;
+}
+
+function buildMensualLocalGroupsHtml(rows, total){
+  if (!rows || !rows.length) {
+    return `<div class="kolrrhh-history-empty">No hay gastos para este mes.</div>`;
+  }
+
+  const groups = {};
+  rows.forEach(row => {
+    const area = String(row?.area || 'Sin area/local').trim() || 'Sin area/local';
+    if (!groups[area]) groups[area] = { area, rows: [], total: 0 };
+    groups[area].rows.push(row);
+    groups[area].total += Number(row?.monto || 0);
+  });
+
+  const blocks = Object.values(groups).sort((a, b) => a.area.localeCompare(b.area, 'es'));
+  return `
+    <div class="kolrrhh-mensual-local-groups">
+      ${blocks.map(group => `
+        <div class="kolrrhh-locales-block kolrrhh-mensual-local-block">
+          <div class="kolrrhh-locales-month">${escapeHtml(group.area)}</div>
+          ${buildMensualLocalTableHtml(group.rows, group.total)}
+        </div>
+      `).join('')}
+      <div class="kolrrhh-mensual-local-grand-total">
+        <span>Total mensual</span>
+        <strong>${escapeHtml(moneyAR(total || 0))}</strong>
+      </div>
+    </div>
+  `;
+}
+
+async function loadMensualLocal(month){
+  const fd = new FormData();
+  fd.append('action', 'kol_rrhh_get_mensual_local');
+  fd.append('nonce', AJAX_NONCE);
+  fd.append('month', String(month || getCurrentLogMonth()));
+  fd.append('area', '');
+
+  const res = await fetch(AJAX_URL, { method: 'POST', body: fd, credentials: 'same-origin' });
+  const json = await res.json();
+  if (!json || json.success !== true) {
+    throw new Error(json?.data?.message || 'No se pudo cargar mensual/local');
+  }
+  return json.data || {};
+}
+
+function renderMensualLocalPanel(month){
+  const el = qs('kolrrhh-detail');
+  if (!el) return;
+
+  const selectedMonth = String(month || getCurrentLogMonth());
+
+  el.innerHTML = `
+    <div class="kolrrhh-locales-head kolrrhh-mensual-local-head">
+      <div>
+        <div class="kolrrhh-locales-title" id="kolrrhh-mensual-local-title">${escapeHtml(formatLogMonthTitle(selectedMonth))}</div>
+        <div class="kolrrhh-locales-sub" id="kolrrhh-mensual-local-sub">Todas las areas/locales</div>
+      </div>
+      <div class="kolrrhh-log-head-actions">
+        <input type="month" class="kolrrhh-modal-input kolrrhh-log-month-input" id="kolrrhh-mensual-local-month" value="${escapeHtml(selectedMonth)}" />
+        <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary kolrrhh-btn-small" id="kolrrhh-mensual-local-refresh">Ver</button>
+        <button type="button" class="kolrrhh-btn kolrrhh-btn-secondary kolrrhh-btn-small" id="kolrrhh-mensual-local-back">Volver</button>
+      </div>
+    </div>
+    <div class="kolrrhh-locales-body" id="kolrrhh-mensual-local-content">
+      <div class="kolrrhh-history-empty">Cargando mensual/local...</div>
+    </div>
+  `;
+
+  loadMensualLocal(selectedMonth)
+    .then(data => {
+      if (__VIEW_MODE__ !== 'mensualLocal') return;
+      const content = qs('kolrrhh-mensual-local-content');
+      const title = qs('kolrrhh-mensual-local-title');
+      if (title) title.textContent = String(data.title || formatLogMonthTitle(selectedMonth));
+      if (content) content.innerHTML = buildMensualLocalGroupsHtml(Array.isArray(data.rows) ? data.rows : [], data.total || 0);
+    })
+    .catch(err => {
+      if (__VIEW_MODE__ !== 'mensualLocal') return;
+      const content = qs('kolrrhh-mensual-local-content');
+      if (!content) return;
+      content.innerHTML = `<div class="kolrrhh-history-empty">${escapeHtml(String(err?.message || 'Error al cargar mensual/local.'))}</div>`;
+    });
+}function normalizeMesLabel(value){
       const raw = String(value ?? '').trim();
       if (!raw) return '';
       if (/^\d{4}-\d{2}/.test(raw)) {
@@ -2597,6 +2712,16 @@ function normalizeMesLabel(value){
     }
 
 
+    if (mensualLocalBtn) {
+      mensualLocalBtn.addEventListener('click', function(ev){
+        ev.preventDefault();
+        closeMainMenu();
+        __VIEW_MODE__ = 'mensualLocal';
+        clearEmployeeSelection();
+        toggleTabs(false);
+        renderMensualLocalPanel();
+      });
+    }
     if (logBtn) {
       logBtn.addEventListener('click', function(ev){
         ev.preventDefault();
@@ -2635,6 +2760,14 @@ function normalizeMesLabel(value){
 
 
     document.addEventListener('click', function(ev){
+      const back = ev.target.closest('#kolrrhh-mensual-local-back');
+      if (!back) return;
+      ev.preventDefault();
+      __VIEW_MODE__ = 'employees';
+      toggleTabs(true);
+      renderEmptyDetail();
+    });
+    document.addEventListener('click', function(ev){
       const back = ev.target.closest('#kolrrhh-log-back');
       if (!back) return;
       ev.preventDefault();
@@ -2650,6 +2783,14 @@ function normalizeMesLabel(value){
       if (__VIEW_MODE__ !== 'log') return;
       const monthInput = qs('kolrrhh-log-month');
       renderLogPanel(monthInput?.value || getCurrentLogMonth());
+    });
+    document.addEventListener('click', function(ev){
+      const refresh = ev.target.closest('#kolrrhh-mensual-local-refresh');
+      if (!refresh) return;
+      ev.preventDefault();
+      if (__VIEW_MODE__ !== 'mensualLocal') return;
+      const monthInput = qs('kolrrhh-mensual-local-month');
+      renderMensualLocalPanel(monthInput?.value || getCurrentLogMonth());
     });
     // Editar rendimiento por local
     document.addEventListener('click', function(ev){

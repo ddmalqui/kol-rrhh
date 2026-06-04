@@ -1486,6 +1486,41 @@
   padding: 14px;
   background: #e4ebf7 !important;
 }
+.kolrrhh-mensual-local-table{
+  min-width: 560px;
+}
+.kolrrhh-mensual-local-table tfoot th{
+  background: #244d91;
+  color: #fff;
+  border: 1px solid #a7b8dc;
+  padding: 12px 8px;
+}
+.kolrrhh-mensual-local-money,
+.kolrrhh-mensual-local-total{
+  text-align: right !important;
+  font-weight: 900;
+}
+.kolrrhh-mensual-local-person{
+  text-align: left !important;
+}
+.kolrrhh-mensual-local-groups{
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+.kolrrhh-mensual-local-block .kolrrhh-tablewrap{
+  border:1px solid rgba(0,0,0,.08);
+}
+.kolrrhh-mensual-local-grand-total{
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
+  gap:18px;
+  padding:14px 16px;
+  background:#244d91;
+  color:#fff;
+  font-weight:900;
+}
 .kolrrhh-log-head-actions{
   display:flex;
   align-items:center;

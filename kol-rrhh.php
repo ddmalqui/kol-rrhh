@@ -9,7 +9,7 @@
 if (!defined('ABSPATH')) exit;
 
 final class KOL_RRHH_Plugin {
-  const VERSION = '1.0.7';
+  const VERSION = '1.0.9';
   const SHORTCODE = 'kol_rrhh';
 
   public function __construct(){
@@ -18,6 +18,7 @@ final class KOL_RRHH_Plugin {
     add_action('wp_ajax_kol_rrhh_save_employee', [$this,'ajax_save_employee']);
     add_action('wp_ajax_kol_rrhh_get_sueldo_items', [$this,'ajax_get_sueldo_items']);
     add_action('wp_ajax_kol_rrhh_get_historial_resumen', [$this,'ajax_get_historial_resumen']);
+    add_action('wp_ajax_kol_rrhh_get_mensual_local', [$this,'ajax_get_mensual_local']);
     add_action('wp_ajax_kol_rrhh_save_sueldo_item', [$this,'ajax_save_sueldo_item']);
     add_action('wp_ajax_kol_rrhh_delete_sueldo_item', [$this,'ajax_delete_sueldo_item']);
     add_action('wp_ajax_kol_rrhh_get_desempeno_items', [$this,'ajax_get_desempeno_items']);
@@ -1094,6 +1095,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
                 </summary>
                 <div class="kolrrhh-menu-panel" id="kolrrhh-main-menu" role="menu" aria-hidden="true">
                   <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-history" role="menuitem">HISTORIAL</button>
+                  <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-mensual-local" role="menuitem">MENSUAL / LOCAL</button>
                   <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-locales" role="menuitem">LOCALES</button>
                   <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-log" role="menuitem">LOG</button>
                   <button type="button" class="kolrrhh-menu-item" id="kolrrhh-add" role="menuitem">AGREGAR PERSONAL</button>
@@ -2313,6 +2315,95 @@ public function ajax_get_historial_resumen(){
   }
 
   wp_send_json_success(['rows' => $rows]);
+}
+
+public function ajax_get_mensual_local(){
+  if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
+    wp_send_json_error(['message' => 'Nonce invalido']);
+  }
+  $this->ajax_require_plugin_access();
+
+  $month = isset($_POST['month']) ? sanitize_text_field(wp_unslash($_POST['month'])) : '';
+  $area = isset($_POST['area']) ? sanitize_text_field(wp_unslash($_POST['area'])) : '';
+
+  if (!preg_match('/^(\d{4})-(\d{2})$/', $month, $m)) {
+    $month = date('Y-m');
+    preg_match('/^(\d{4})-(\d{2})$/', $month, $m);
+  }
+
+  $year = isset($m[1]) ? intval($m[1]) : intval(date('Y'));
+  $monthNum = isset($m[2]) ? intval($m[2]) : intval(date('n'));
+  if ($year < 2000 || $year > 2100 || $monthNum < 1 || $monthNum > 12) {
+    wp_send_json_error(['message' => 'Mes invalido.']);
+  }
+
+  global $wpdb;
+  $empTable = $this->table_name();
+  $sueldoTable = $this->sueldos_items_table();
+
+  $empExists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $empTable));
+  $sueldoExists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $sueldoTable));
+  if ($empExists !== $empTable || $sueldoExists !== $sueldoTable) {
+    wp_send_json_success([
+      'month' => $month,
+      'title' => $this->kol_rrhh_month_title($month),
+      'area' => $area,
+      'rows' => [],
+      'total' => 0,
+    ]);
+  }
+
+  $start = sprintf('%04d-%02d-01', $year, $monthNum);
+  $end = date('Y-m-t', strtotime($start));
+  $where = "DATE(COALESCE(NULLIF(s.periodo_fin, ''), s.periodo_inicio)) BETWEEN %s AND %s";
+  $params = [$start, $end];
+
+  if ($area !== '') {
+    $where .= " AND s.area = %s";
+    $params[] = $area;
+  }
+
+  $sql = "
+    SELECT
+      COALESCE(NULLIF(e.nombre, ''), CONCAT('Legajo ', s.legajo)) AS nombre,
+      s.legajo AS legajo,
+      s.area AS area,
+      SUM(COALESCE(s.efectivo,0) + COALESCE(s.transferencia,0) + COALESCE(s.creditos,0)) AS monto
+    FROM {$sueldoTable} s
+    LEFT JOIN {$empTable} e ON CAST(e.legajo AS UNSIGNED) = CAST(s.legajo AS UNSIGNED)
+    WHERE {$where}
+    GROUP BY s.legajo, s.area, e.nombre
+    HAVING monto <> 0
+    ORDER BY nombre ASC, s.legajo ASC
+  ";
+
+  $rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A) ?: [];
+  $total = 0.0;
+  foreach ($rows as &$row) {
+    $row['monto'] = (float)($row['monto'] ?? 0);
+    $total += $row['monto'];
+  }
+  unset($row);
+
+  wp_send_json_success([
+    'month' => $month,
+    'title' => $this->kol_rrhh_month_title($month),
+    'area' => $area,
+    'rows' => $rows,
+    'total' => $total,
+  ]);
+}
+
+private function kol_rrhh_month_title($month){
+  $month = trim((string)$month);
+  if (!preg_match('/^(\d{4})-(\d{2})$/', $month, $m)) return $month;
+  $names = [
+    1 => 'ENERO', 2 => 'FEBRERO', 3 => 'MARZO', 4 => 'ABRIL',
+    5 => 'MAYO', 6 => 'JUNIO', 7 => 'JULIO', 8 => 'AGOSTO',
+    9 => 'SEPTIEMBRE', 10 => 'OCTUBRE', 11 => 'NOVIEMBRE', 12 => 'DICIEMBRE',
+  ];
+  $num = intval($m[2]);
+  return ($names[$num] ?? $m[2]) . ' ' . $m[1];
 }
 
 
