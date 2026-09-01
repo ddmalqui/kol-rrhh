@@ -1059,6 +1059,8 @@ if (desempenoSaveBtn) {
 
   function attachMoneyInput(el){
     if (!el) return;
+    if (el.dataset.kolMoneyBound === '1') return;
+    el.dataset.kolMoneyBound = '1';
 
     const format = () => {
       const n = parseMoneyAR(el.value);
@@ -1239,11 +1241,12 @@ if (partSel) {
     setVal('kolrrhh-sueldo-vac-tomadas', row?.vac_tomadas ?? '');
     setVal('kolrrhh-sueldo-feriados', row?.feriados ??'');
     setVal('kolrrhh-sueldo-vac-no-tomadas', row?.vac_no_tomadas ?? '');
+    setVal('kolrrhh-sueldo-aguinaldo', row?.aguinaldo ?? '');
     
 
 
     // money formatting (en blur ya se formatea)
-    ['kolrrhh-sueldo-jornada','kolrrhh-sueldo-vac-tomadas','kolrrhh-sueldo-feriados','kolrrhh-sueldo-vac-no-tomadas',
+    ['kolrrhh-sueldo-jornada','kolrrhh-sueldo-vac-tomadas','kolrrhh-sueldo-feriados','kolrrhh-sueldo-vac-no-tomadas','kolrrhh-sueldo-aguinaldo',
       'kolrrhh-sueldo-efectivo','kolrrhh-sueldo-transferencia','kolrrhh-sueldo-creditos',
       'kolrrhh-sueldo-bono','kolrrhh-sueldo-descuentos','kolrrhh-sueldo-liquidacion']
       .forEach(id => {
@@ -1663,7 +1666,7 @@ async function refreshDesempenoPersonalDesempeno(){
 
     ['kolrrhh-sueldo-periodo-inicio','kolrrhh-sueldo-periodo-fin','kolrrhh-sueldo-dias-trabajo','kolrrhh-sueldo-rol','kolrrhh-sueldo-participacion','kolrrhh-sueldo-jornada',
      'kolrrhh-sueldo-efectivo','kolrrhh-sueldo-transferencia','kolrrhh-sueldo-creditos','kolrrhh-sueldo-bono','kolrrhh-sueldo-descuentos','kolrrhh-sueldo-liquidacion',
-     'kolrrhh-sueldo-vac-tomadas','kolrrhh-sueldo-feriados','kolrrhh-sueldo-vac-no-tomadas'
+     'kolrrhh-sueldo-vac-tomadas','kolrrhh-sueldo-feriados','kolrrhh-sueldo-vac-no-tomadas','kolrrhh-sueldo-aguinaldo'
     ].forEach(id => setVal(id, ''));
 
     // reset labels calculados
@@ -1786,6 +1789,7 @@ async function refreshDesempenoPersonalDesempeno(){
                   <th>Feriados</th>
                   <th>Liquidación</th>
                   <th>Vac. No tomadas</th>
+                  <th>Aguinaldo</th>
                 </tr>
               </thead>
               <tbody>
@@ -1797,9 +1801,10 @@ async function refreshDesempenoPersonalDesempeno(){
                   <td>${moneyAR(r.feriados)}</td>
                   <td>${moneyAR(r.liquidacion)}</td>
                   <td>${moneyAR(r.vac_no_tomadas)}</td>
+                  <td>${moneyAR(r.aguinaldo)}</td>
                 </tr>
                 <tr class="kolrrhh-sueldo-extra-row">
-                  <td colspan="7">
+                  <td colspan="8">
                     <div class="kolrrhh-sueldo-extra-grid">
                       <div class="kolrrhh-sueldo-extra-item"><span class="kolrrhh-sueldo-extra-label">Base</span><strong>${moneyAR(r.base || 0)}</strong></div>
                       <div class="kolrrhh-sueldo-extra-item"><span class="kolrrhh-sueldo-extra-label">Antig.</span><strong>${moneyAR(r.antig || 0)}</strong></div>
@@ -2846,6 +2851,9 @@ function renderMensualLocalPanel(month){
     function handleSueldoRefreshEvent(ev){
       if (!shouldRefreshSueldoFromEvent(ev.target)) return;
       refreshAllSueldoCalculations();
+      if (typeof calcularEfectivoAutomatico === 'function') {
+        calcularEfectivoAutomatico();
+      }
     }
 
     document.addEventListener('input', handleSueldoRefreshEvent);
@@ -3332,6 +3340,7 @@ if (finSel) finSel.addEventListener('change', () => {
         payload.set('vac_tomadas', getVal('kolrrhh-sueldo-vac-tomadas') || '0');
         payload.set('feriados', getVal('kolrrhh-sueldo-feriados') || '0');
         payload.set('vac_no_tomadas', getVal('kolrrhh-sueldo-vac-no-tomadas') || '0');
+        payload.set('aguinaldo', getVal('kolrrhh-sueldo-aguinaldo') || '0');
 
         clearSueldoError();
         sueldoSaveBtn.disabled = true;
@@ -3408,6 +3417,7 @@ function calcularEfectivoAutomatico() {
     const feriados    = limpiarMontoKOL('kolrrhh-sueldo-feriados');
     const liquidacion = limpiarMontoKOL('kolrrhh-sueldo-liquidacion');
     const vacNoTom    = limpiarMontoKOL('kolrrhh-sueldo-vac-no-tomadas');
+    const aguinaldo   = limpiarMontoKOL('kolrrhh-sueldo-aguinaldo');
     const base        = limpiarMontoKOL('kolrrhh-sueldo-base');
     const antig       = limpiarMontoKOL('kolrrhh-sueldo-antig');
     const comision    = limpiarMontoKOL('kolrrhh-sueldo-comision');
@@ -3428,6 +3438,7 @@ function calcularEfectivoAutomatico() {
         feriados +
         liquidacion +
         vacNoTom +
+        aguinaldo +
         base +
         antig +
         comision +
@@ -3466,7 +3477,7 @@ function actualizarTotalCobrar() {
 const idsInputsSueldo = [
     'kolrrhh-sueldo-jornada', 'kolrrhh-sueldo-bono', 'kolrrhh-sueldo-descuentos',
     'kolrrhh-sueldo-vac-tomadas', 'kolrrhh-sueldo-feriados', 'kolrrhh-sueldo-liquidacion',
-    'kolrrhh-sueldo-vac-no-tomadas', 'kolrrhh-sueldo-efectivo', 'kolrrhh-sueldo-transferencia', 'kolrrhh-sueldo-creditos'
+    'kolrrhh-sueldo-vac-no-tomadas', 'kolrrhh-sueldo-aguinaldo', 'kolrrhh-sueldo-efectivo', 'kolrrhh-sueldo-transferencia', 'kolrrhh-sueldo-creditos'
 ];
 
 idsInputsSueldo.forEach(id => {

@@ -3,13 +3,13 @@
  * Plugin Name: KOL RRHH
  * Author: ddmalqui
  * Description: Panel simple de RRHH (listado de personal) para KOL. Shortcode: [kol_rrhh]
- * Version: 1.0.2
+ * Version: 1.0.10
  */
 
 if (!defined('ABSPATH')) exit;
 
 final class KOL_RRHH_Plugin {
-  const VERSION = '1.0.9';
+  const VERSION = '1.0.10';
   const SHORTCODE = 'kol_rrhh';
 
   public function __construct(){
@@ -39,8 +39,13 @@ final class KOL_RRHH_Plugin {
 
   public function register_assets(){
     $base = plugin_dir_url(__FILE__);
-    wp_register_style('kol-rrhh-style', $base.'style.css', [], self::VERSION);
-    wp_register_script('kol-rrhh-js', $base.'rrhh.js', ['jquery'], self::VERSION, true);
+    $style_path = plugin_dir_path(__FILE__) . 'style.css';
+    $script_path = plugin_dir_path(__FILE__) . 'rrhh.js';
+    $style_ver = file_exists($style_path) ? filemtime($style_path) : self::VERSION;
+    $script_ver = file_exists($script_path) ? self::VERSION . '-aguinaldo-' . filemtime($script_path) : self::VERSION;
+
+    wp_register_style('kol-rrhh-style', $base.'style.css', [], $style_ver);
+    wp_register_script('kol-rrhh-js', $base.'rrhh.js', ['jquery'], $script_ver, true);
     global $wpdb;
 
 /* Locales */
@@ -1457,7 +1462,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
       <div id="kolrrhh-sueldo-empleado-only" class="kolrrhh-sueldo-empleado-only">
         <div class="kolrrhh-modal-section-title">Detalles</div>
 
-        <div class="kolrrhh-form-row" style="--cols:7;">
+        <div class="kolrrhh-form-row" style="--cols:8;">
         <div class="kolrrhh-form-field">
           <label class="kolrrhh-modal-label">Jornada</label>
           <input id="kolrrhh-sueldo-jornada" type="text" class="kolrrhh-modal-input kolrrhh-money" maxlength="80" placeholder="Ej: Completa / Media" />
@@ -1485,6 +1490,10 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
         <div class="kolrrhh-form-field">
           <label class="kolrrhh-modal-label">Vac.no tom.</label>
           <input id="kolrrhh-sueldo-vac-no-tomadas" type="text" inputmode="decimal" class="kolrrhh-modal-input kolrrhh-money" />
+        </div>
+        <div class="kolrrhh-form-field">
+          <label class="kolrrhh-modal-label">Aguinaldo</label>
+          <input id="kolrrhh-sueldo-aguinaldo" type="text" inputmode="decimal" class="kolrrhh-modal-input kolrrhh-money" />
         </div>
       </div>
 
@@ -2046,6 +2055,25 @@ private function sueldo_calculated_fields(){
   return ['base', 'antig', 'comision', 'desempeno_personal', 'rendimiento', 'no_rem'];
 }
 
+private function ensure_sueldos_aguinaldo_column(){
+  global $wpdb;
+  $table = $this->sueldos_items_table();
+
+  $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table));
+  if ($exists !== $table) {
+    return false;
+  }
+
+  $has_col = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", 'aguinaldo'));
+  if (strtolower((string)$has_col) === 'aguinaldo') {
+    return true;
+  }
+
+  $wpdb->query("ALTER TABLE {$table} ADD COLUMN aguinaldo BIGINT(20) NULL AFTER vac_no_tomadas");
+  $has_col_after = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", 'aguinaldo'));
+  return strtolower((string)$has_col_after) === 'aguinaldo';
+}
+
 private function ensure_sueldos_calculated_columns(){
   global $wpdb;
   $table = $this->sueldos_items_table();
@@ -2058,7 +2086,7 @@ private function ensure_sueldos_calculated_columns(){
   $cols = $wpdb->get_col("SHOW COLUMNS FROM {$table}", 0);
   $cols = is_array($cols) ? $cols : [];
 
-  $after = 'vac_no_tomadas';
+  $after = in_array('aguinaldo', $cols, true) ? 'aguinaldo' : 'vac_no_tomadas';
   foreach ($this->sueldo_calculated_fields() as $field) {
     if (in_array($field, $cols, true)) {
       $after = $field;
@@ -2189,12 +2217,13 @@ public function ajax_get_sueldo_items(){
 
   $this->ensure_sueldos_tipo_liquidacion_column();
   $this->ensure_sueldos_participacion_decimal_column();
+  $this->ensure_sueldos_aguinaldo_column();
   $this->ensure_sueldos_calculated_columns();
 
   $rows = $wpdb->get_results(
     $wpdb->prepare(
       "SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, area, rol, participacion, horas, tipo_liquidacion,
-              efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas,
+              efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas, aguinaldo AS aguinaldo,
               base, antig, comision, desempeno_personal, rendimiento, no_rem, editable
        FROM {$table}
        WHERE legajo = %d
@@ -3172,6 +3201,7 @@ if (!$rol || !$area) {
   $vac_tomadas      = $to_num($_POST['vac_tomadas'] ?? '');
   $feriados         = $to_num($_POST['feriados'] ?? '');
   $vac_no_tomadas   = $to_num($_POST['vac_no_tomadas'] ?? '');
+  $aguinaldo        = $to_num($_POST['aguinaldo'] ?? '');
 
   global $wpdb;
   $table = $this->sueldos_items_table();
@@ -3183,6 +3213,7 @@ if (!$rol || !$area) {
 
   $this->ensure_sueldos_tipo_liquidacion_column();
   $this->ensure_sueldos_participacion_decimal_column();
+  $this->ensure_sueldos_aguinaldo_column();
   $this->ensure_sueldos_calculated_columns();
 
   if ($id > 0) {
@@ -3224,19 +3255,20 @@ if (!$rol || !$area) {
     'vac_tomadas' => $vac_tomadas,
     'feriados' => $feriados,
     'liquidacion' => $liquidacion,
-    'vac_no_tomadas' => $vac_no_tomadas
+    'vac_no_tomadas' => $vac_no_tomadas,
+    'aguinaldo' => $aguinaldo
   ];
   $calc = $this->kol_rrhh_calculate_sueldo_breakdown($data, $employee);
   foreach ($this->sueldo_calculated_fields() as $field) {
     $data[$field] = $this->kol_rrhh_parse_decimal($calc[$field] ?? 0);
   }
-$formats = ['%d','%s','%s','%f','%s','%f','%s','%f','%s','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f'];
+$formats = ['%d','%s','%s','%f','%s','%f','%s','%f','%s','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f','%f'];
 
   if ($id > 0) {
-    $before = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas, base, antig, comision, desempeno_personal, rendimiento, no_rem, editable FROM {$table} WHERE id = %d", $id), ARRAY_A);
+    $before = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas, aguinaldo AS aguinaldo, base, antig, comision, desempeno_personal, rendimiento, no_rem, editable FROM {$table} WHERE id = %d", $id), ARRAY_A);
     $ok = $wpdb->update($table, $data, ['id' => $id], $formats, ['%d']);
     if ($ok === false) wp_send_json_error(['message' => 'No se pudo actualizar']);
-    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas, base, antig, comision, desempeno_personal, rendimiento, no_rem, editable FROM {$table} WHERE id = %d", $id), ARRAY_A);
+    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas, aguinaldo AS aguinaldo, base, antig, comision, desempeno_personal, rendimiento, no_rem, editable FROM {$table} WHERE id = %d", $id), ARRAY_A);
     if ((int)$ok > 0) {
       $this->audit_log('update', $table, [
         'id' => $id,
@@ -3249,7 +3281,7 @@ $formats = ['%d','%s','%s','%f','%s','%f','%s','%f','%s','%f','%f','%f','%f','%f
     $ok = $wpdb->insert($table, $data, $formats);
     if (!$ok) wp_send_json_error(['message' => 'No se pudo insertar']);
     $new_id = intval($wpdb->insert_id);
-    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas, base, antig, comision, desempeno_personal, rendimiento, no_rem, editable FROM {$table} WHERE id = %d", $new_id), ARRAY_A);
+    $row = $wpdb->get_row($wpdb->prepare("SELECT id, legajo, periodo_inicio, periodo_fin, dias_de_trabajo, rol, participacion, area, horas, tipo_liquidacion, efectivo, transferencia, creditos, jornada, bono, descuentos, vac_tomadas, feriados, liquidacion, vac_no_tomadas, aguinaldo AS aguinaldo, base, antig, comision, desempeno_personal, rendimiento, no_rem, editable FROM {$table} WHERE id = %d", $new_id), ARRAY_A);
     $this->audit_log('insert', $table, [
       'id' => $new_id,
       'row' => $row,
@@ -3918,6 +3950,7 @@ $dayKey = $this->fmt_day_key($inDt);
 
   global $wpdb;
   $table = $this->sueldos_items_table();
+  $this->ensure_sueldos_aguinaldo_column();
   $this->ensure_sueldos_calculated_columns();
 
   $placeholders = implode(',', array_fill(0, count($ids), '%d'));
@@ -3945,6 +3978,9 @@ $dayKey = $this->fmt_day_key($inDt);
 
   $items = [];
   foreach ($rows as $row) {
+    if (is_array($row) && !array_key_exists('aguinaldo', $row) && array_key_exists('Aguinaldo', $row)) {
+      $row['aguinaldo'] = $row['Aguinaldo'];
+    }
     $legajoNum = intval($row['legajo'] ?? 0);
     $emp = $empByLegajo[$legajoNum] ?? [];
 
@@ -3999,6 +4035,7 @@ private function render_print_html($items){
     'feriados' => 'Feriados',
     'liquidacion' => 'Liquidación',
     'vac_no_tomadas' => 'Vac. no tomadas',
+    'aguinaldo' => 'Aguinaldo',
   ];
 
   $fmt = function($n){

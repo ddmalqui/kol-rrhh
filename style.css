@@ -807,6 +807,10 @@
   font-size: 15px;
 }
 
+#kolrrhh-sueldo-modal input.kolrrhh-modal-input{
+  padding: 6px 4px;
+}
+
 .kolrrhh-modal-actions{
   display:flex; justify-content:flex-end; gap:12px;
   padding: 14px 18px;
