@@ -1656,3 +1656,58 @@
   opacity: .6;
   cursor: wait;
 }
+
+/* Ventas mensuales: misma paleta que Historial de cobros. */
+#kolrrhh-ventas-body { padding: 16px; }
+#kolrrhh-ventas-body .kolrrhh-locales-block { margin-bottom: 20px; border: 1px solid #a7b8dc; border-radius: 14px; overflow: hidden; }
+.kolrrhh-ventas-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 14px 16px; background: #f0f4fb; }
+.kolrrhh-ventas-heading strong { color: #244777; margin-right: auto; }
+.kolrrhh-ventas-status { padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; }
+.kolrrhh-ventas-status.is-open { background: #daf0df; color: #0b3d1e; }
+.kolrrhh-ventas-status.is-closed { background: #ffe8e4; color: #8a1c1c; }
+.kolrrhh-ventas-scroll { overflow-x: auto; }
+#kolrrhh-ventas-body .kolrrhh-ventas-table { width: 100%; border-collapse: collapse; margin: 0; }
+#kolrrhh-ventas-body .kolrrhh-ventas-table th { background: #3f6fbd; color: #fff; padding: 12px 16px; font-weight: 800; }
+#kolrrhh-ventas-body .kolrrhh-ventas-table td { padding: 12px 16px; border-bottom: 1px solid #b9c9e3; color: #24354d; }
+#kolrrhh-ventas-body .kolrrhh-ventas-table tbody tr:nth-child(odd) td { background: #c9d5e8; }
+#kolrrhh-ventas-body .kolrrhh-ventas-table tbody tr:nth-child(even) td { background: #e4ebf7; }
+#kolrrhh-ventas-body .kolrrhh-ventas-table tbody tr:hover td { background: #b9cdea; }
+#kolrrhh-ventas-body .kolrrhh-ventas-table :is(th, td):nth-child(2) { text-align: left; }
+#kolrrhh-ventas-body .kolrrhh-ventas-table :is(th, td):nth-child(3) { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 700; }
+#kolrrhh-ventas-body .kolrrhh-ventas-table :is(th, td):nth-child(4) { white-space: nowrap; }
+dialog.kolrrhh-ventas-dialog { position: fixed; inset: 0; margin: auto; width: min(720px, calc(100vw - 32px)); height: fit-content; max-width: calc(100vw - 32px); max-height: calc(100dvh - 48px); box-sizing: border-box; overflow: hidden; border: 1px solid rgba(0,0,0,.08); border-radius: 18px; padding: 0; color: #17212b; background: #fff; box-shadow: 0 25px 80px rgba(0,0,0,.25); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+.kolrrhh-ventas-dialog::backdrop { background: rgba(0,0,0,.35); }
+.kolrrhh-ventas-dialog form { display: flex; flex-direction: column; max-height: calc(100dvh - 50px); margin: 0; }
+.kolrrhh-ventas-dialog .kolrrhh-modal-top { flex-shrink: 0; background: #f0f4fb; gap: 12px; }
+.kolrrhh-ventas-dialog .kolrrhh-modal-title { margin: 0; font-size: 18px; color: #244777; }
+.kolrrhh-ventas-content { padding: 16px 18px; overflow-y: auto; min-height: 0; }
+.kolrrhh-ventas-content > p { margin: 0 0 14px; font-size: 13px; color: #5d6b7f; }
+.kolrrhh-ventas-inputs { border: 1px solid #a7b8dc; border-radius: 12px; overflow: hidden; }
+.kolrrhh-ventas-inputs label { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, 220px); gap: 16px; align-items: center; padding: 10px 14px; margin: 0; font-size: 14px; font-weight: 700; }
+.kolrrhh-ventas-inputs label:nth-child(odd) { background: #c9d5e8; }
+.kolrrhh-ventas-inputs label:nth-child(even) { background: #e4ebf7; }
+.kolrrhh-ventas-dialog input.kolrrhh-modal-input { box-sizing: border-box; min-width: 0; margin: 0; padding: 10px 12px; border: 1px solid #a7b8dc; border-radius: 10px; background: #fff; color: #17212b; box-shadow: none; text-align: right; font-size: 15px; font-variant-numeric: tabular-nums; }
+.kolrrhh-ventas-dialog input.kolrrhh-modal-input:focus { outline: 2px solid #3f6fbd; outline-offset: 1px; }
+.kolrrhh-ventas-dialog .kolrrhh-modal-actions { flex-shrink: 0; background: #fff; }
+.kolrrhh-ventas-content .kolrrhh-ventas-error { color: #b42318; margin: 12px 0 0; }
+#kolrrhh-ventas-body button:disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 480px) {
+  .kolrrhh-ventas-inputs label { grid-template-columns: 1fr; gap: 6px; }
+  .kolrrhh-ventas-dialog .kolrrhh-modal-title { font-size: 16px; }
+  #kolrrhh-ventas-body { padding: 8px; }
+}
+/* Basicos: tabla de roles y bandas horarias, misma paleta de RRHH. */
+#kolrrhh-basicos-body { padding: 16px; }
+.kolrrhh-basicos-scroll { overflow-x: auto; border: 1px solid #a7b8dc; border-radius: 12px; margin-bottom: 18px; }
+.kolrrhh-basicos-table { width: 100%; border-collapse: collapse; margin: 0; font-size: 14px; }
+.kolrrhh-basicos-table th, .kolrrhh-basicos-table td { padding: 12px 16px; border: 1px solid #a7b8dc; text-align: right; vertical-align: middle; }
+.kolrrhh-basicos-table thead th { background: #3f6fbd; color: #fff; font-weight: 800; white-space: nowrap; }
+.kolrrhh-basicos-table th:first-child { text-align: left; min-width: 160px; }
+.kolrrhh-basicos-table tbody tr:nth-child(odd) > * { background: #c9d5e8; color: #24354d; }
+.kolrrhh-basicos-table tbody tr:nth-child(even) > * { background: #e4ebf7; color: #24354d; }
+.kolrrhh-basicos-amount { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kolrrhh-basicos-table small { display: block; font-size: 11px; margin-top: 4px; color: #52637a; white-space: nowrap; }
+dialog.kolrrhh-basicos-dialog { width: min(1100px, calc(100vw - 32px)); }
+.kolrrhh-basicos-controls { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.kolrrhh-basicos-controls label { font-size: 13px; font-weight: 800; }
+.kolrrhh-basicos-controls input.kolrrhh-modal-input { display: block; max-width: 180px; margin-top: 6px; text-align: left; }

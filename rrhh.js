@@ -2092,6 +2092,8 @@ async function refreshDesempenoPersonalDesempeno(){
     }
 
     // === LOCALES: botón en el header izquierdo ===
+    document.addEventListener('kolrrhh:basicos-open', () => { __VIEW_MODE__ = 'basicos'; });
+    document.addEventListener('kolrrhh:ventas-open', () => { __VIEW_MODE__ = 'ventas'; });
     const localesBtn = qs('kolrrhh-open-locales');
     const historyBtn = qs('kolrrhh-open-history');
     const mensualLocalBtn = qs('kolrrhh-open-mensual-local');
@@ -3489,3 +3491,184 @@ idsInputsSueldo.forEach(id => {
 });
 })();
 
+
+(function () {
+  document.addEventListener('DOMContentLoaded', () => {
+    const button = document.getElementById('kolrrhh-open-ventas');
+    if (!button) return;
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const title = period => period + ' · ' + new Date(period + '-01T12:00:00').toLocaleDateString('es-AR', {month:'long', year:'numeric'});
+    const pesos = new Intl.NumberFormat('es-AR', {style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2});
+    function parsePesos(value) {
+      const clean = value.replace(/\$/g, '').replace(/\s/g, '');
+      if (!clean) return '';
+      if (!/^(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d{1,2})?$/.test(clean)) return null;
+      return clean.replace(/\./g, '').replace(',', '.');
+    }
+    let data;
+    async function request(action, payload = {}) {
+      const body = new FormData();
+      body.set('action', 'kol_rrhh_' + action + '_ventas_mensuales');
+      body.set('nonce', KOL_RRHH.nonce);
+      Object.entries(payload).forEach(([key, value]) => body.set(key, value));
+      const response = await fetch(KOL_RRHH.ajaxurl, {method:'POST', body});
+      const json = await response.json();
+      if (!json.success) throw new Error(json.data?.message || 'No se pudo completar la operacion.');
+      return json.data;
+    }
+    async function render() {
+      const detail = document.getElementById('kolrrhh-detail');
+      detail.innerHTML = '<div class="kolrrhh-locales-head"><div class="kolrrhh-locales-title">VENTAS MENSUALES</div><button type="button" class="kolrrhh-btn kolrrhh-btn-secondary" id="kolrrhh-locales-back">Volver</button></div><div id="kolrrhh-ventas-body" aria-live="polite">Cargando...</div>';
+      const body = document.getElementById('kolrrhh-ventas-body');
+      try {
+        data = await request('get');
+        if (!body.isConnected) return;
+        body.innerHTML = data.groups.map(group => `<section class="kolrrhh-locales-block"><div class="kolrrhh-ventas-heading"><strong>${esc(title(group.period))}</strong><span class="kolrrhh-ventas-status ${group.editable ? 'is-open' : 'is-closed'}">${group.editable ? 'Abierto' : 'Bloqueado / sin apertura'}</span><button type="button" class="kolrrhh-btn kolrrhh-btn-secondary" data-period="${esc(group.period)}" ${group.editable ? '' : 'disabled'}>Editar</button></div><div class="kolrrhh-ventas-scroll"><table class="kolrrhh-table kolrrhh-ventas-table"><thead><tr><th>Local Id</th><th>Nombre de local</th><th>Monto de ventas</th><th>Fecha de carga</th></tr></thead><tbody>${group.rows.map(row => `<tr><td>${esc(row.local_id)}</td><td>${esc(row.nombre || 'Local ' + row.local_id)}</td><td>${row.monto === null ? '—' : pesos.format(Number(row.monto))}</td><td>${esc(row.fecha_carga || '—')}</td></tr>`).join('')}</tbody></table></div></section>`).join('') + `${data.groups.length ? '' : '<p>No hay ventas cargadas.</p>'}<button type="button" class="kolrrhh-btn kolrrhh-btn-primary" data-period="${esc(data.next)}" ${data.next_editable ? '' : 'disabled'}>+ Agregar ${esc(title(data.next))}</button>${data.next_editable ? '' : '<p>Para cargar el proximo mes, abrilo en BLOQUEAR EDICION.</p>'}`;
+        body.querySelectorAll('[data-period]').forEach(trigger => trigger.onclick = () => openModal(trigger));
+      } catch (error) { if (body.isConnected) body.textContent = error.message; }
+    }
+    function openModal(trigger) {
+      const period = trigger.dataset.period;
+      const group = data.groups.find(group => group.period === period);
+      if (!(group ? group.editable : data.next_editable)) return;
+      const rows = group?.rows || [];
+      const locales = [...data.locales];
+      rows.forEach(row => { if (!locales.some(local => String(local.id) === String(row.local_id))) locales.push({id:row.local_id, nombre:row.nombre || 'Local ' + row.local_id}); });
+      const modal = document.createElement('dialog');
+      modal.className = 'kolrrhh-ventas-dialog';
+      modal.setAttribute('aria-labelledby','kolrrhh-ventas-title');
+      modal.innerHTML = `<form><div class="kolrrhh-modal-top"><h2 class="kolrrhh-modal-title" id="kolrrhh-ventas-title">Ventas · ${esc(title(period))}</h2><button type="button" class="kolrrhh-modal-x" data-cancel aria-label="Cerrar">&times;</button></div><div class="kolrrhh-ventas-content"><p>Los importes son opcionales. Deja vacio un importe existente para eliminar esa venta. Un mes sin ventas no se agrega.</p><div class="kolrrhh-ventas-inputs">${locales.map(local => {
+        const row = rows.find(row => String(row.local_id) === String(local.id));
+        return `<label><span>${esc(local.id)} · ${esc(local.nombre)}</span><input type="text" inputmode="decimal" class="kolrrhh-modal-input" data-local-id="${esc(local.id)}" value="${esc(row?.monto == null ? '' : pesos.format(Number(row.monto)))}" placeholder="$ 0,00" autocomplete="off"></label>`;
+      }).join('')}</div><p role="alert" class="kolrrhh-ventas-error"></p></div><div class="kolrrhh-modal-actions"><button type="button" class="kolrrhh-btn kolrrhh-btn-secondary" data-cancel>Cancelar</button><button type="submit" class="kolrrhh-btn kolrrhh-btn-primary">Guardar</button></div></form>`;
+      document.body.appendChild(modal);
+      let saving = false;
+      modal.addEventListener('close', () => { modal.remove(); if (trigger.isConnected) trigger.focus(); });
+      modal.addEventListener('cancel', event => { if (saving) event.preventDefault(); });
+      modal.querySelectorAll('[data-cancel]').forEach(button => { button.onclick = () => modal.close(); });
+      modal.querySelectorAll('[data-local-id]').forEach(input => {
+        input.addEventListener('focus', () => {
+          const value = parsePesos(input.value);
+          if (value !== null) input.value = value.replace('.', ',');
+        });
+        input.addEventListener('input', () => input.setCustomValidity(''));
+        input.addEventListener('blur', () => {
+          const value = parsePesos(input.value);
+          input.setCustomValidity(value === null ? 'Usa un importe como 1.234,56, con hasta dos decimales.' : '');
+          if (value !== null && value !== '') input.value = pesos.format(Number(value));
+        });
+      });
+      modal.querySelector('form').onsubmit = async event => {
+        event.preventDefault();
+        if (saving) return;
+        const values = {};
+        let invalid = null;
+        modal.querySelectorAll('[data-local-id]').forEach(input => {
+          const value = parsePesos(input.value);
+          input.setCustomValidity(value === null ? 'Usa un importe como 1.234,56, con hasta dos decimales.' : '');
+          if (value === null && !invalid) invalid = input;
+          values[input.dataset.localId] = value;
+        });
+        if (invalid) { invalid.reportValidity(); return; }
+        if (rows.some(row => values[String(row.local_id)] === '') && !window.confirm('Se eliminaran las ventas cuyos importes dejaste vacios. ¿Continuar?')) return;
+        saving = true;
+        modal.querySelectorAll('button').forEach(button => { button.disabled = true; });
+        try {
+          await request('save', {period, values:JSON.stringify(values)});
+          modal.close();
+          if (document.getElementById('kolrrhh-ventas-body')) render();
+        } catch (error) { modal.querySelector('.kolrrhh-ventas-error').textContent = error.message; }
+        finally { saving = false; modal.querySelectorAll('button').forEach(button => { button.disabled = false; }); }
+      };
+      modal.showModal();
+    }
+    button.addEventListener('click', () => {
+      document.dispatchEvent(new Event('kolrrhh:ventas-open'));
+      document.getElementById('kolrrhh-main-menu-wrap').open = false;
+      document.querySelectorAll('.kolrrhh-item.is-selected').forEach(el => el.classList.remove('is-selected'));
+      document.querySelectorAll('.kolrrhh-tabs, .kolrrhh-tabpanes').forEach(el => el.classList.add('kolrrhh-hidden'));
+      render();
+    });
+  });
+})();
+(function () {
+  document.addEventListener('DOMContentLoaded', () => {
+    const trigger = document.getElementById('kolrrhh-open-basicos');
+    if (!trigger) return;
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const money = new Intl.NumberFormat('es-AR', {style:'currency', currency:'ARS'});
+    const date = value => value ? String(value).replace(/^(\d{4})-(\d{2})-(\d{2})/, '$3/$2/$1') : 'Sin fecha registrada';
+    let current;
+    async function request(action, values = {}) {
+      const body = new FormData();
+      body.set('action', 'kol_rrhh_' + action + '_basicos'); body.set('nonce', KOL_RRHH.nonce);
+      Object.entries(values).forEach(([key,value]) => body.set(key,value));
+      const response = await fetch(KOL_RRHH.ajaxurl,{method:'POST',body});
+      const json = await response.json();
+      if (!json.success) throw new Error(json.data?.message || 'No se pudo completar la operacion.');
+      return json.data;
+    }
+    function table(rows, percentage = null) {
+      const hours = [...new Map(rows.map(r => [String(r.hours_id), r.hours])).entries()].sort((a,b) => Number(a[1])-Number(b[1]));
+      const roles = [...new Map(rows.map(r => [String(r.role_id), r.role])).entries()].sort((a,b) => String(a[1]).localeCompare(String(b[1]),'es'));
+      return `<div class="kolrrhh-basicos-scroll"><table class="kolrrhh-basicos-table"><thead><tr><th>Nombre del rol</th>${hours.map(([id,label]) => `<th>${esc(label)} hs</th>`).join('')}</tr></thead><tbody>${roles.map(([id,label]) => `<tr><th scope="row">${esc(label)}</th>${hours.map(([hour]) => {
+        const matches = rows.filter(r => String(r.role_id)===id && String(r.hours_id)===hour);
+        return `<td>${matches.length ? matches.map(r => {
+          const amount = percentage === null ? Number(r.amount) : Math.round((Number(r.amount)*(1+percentage/100)+Number.EPSILON)*100)/100;
+          return `<div class="kolrrhh-basicos-amount">${esc(money.format(amount))}</div><small>${percentage === null ? 'Vigente desde ' + esc(date(r.since)) : 'Actual: ' + esc(money.format(Number(r.amount)))}</small>`;
+        }).join('<hr>') : '&mdash;'}</td>`;
+      }).join('')}</tr>`).join('')}</tbody></table></div>`;
+    }
+    async function render() {
+      const detail = document.getElementById('kolrrhh-detail');
+      detail.innerHTML = '<div class="kolrrhh-locales-head"><div><div class="kolrrhh-locales-title">BASICOS</div><div class="kolrrhh-locales-sub">Montos actuales por rol y horas</div></div><button type="button" class="kolrrhh-btn kolrrhh-btn-secondary" id="kolrrhh-locales-back">Volver</button></div><div id="kolrrhh-basicos-body" aria-live="polite">Cargando...</div>';
+      const body = document.getElementById('kolrrhh-basicos-body');
+      try {
+        const result = await request('get');
+        if (!body.isConnected) return;
+        current = result;
+        body.innerHTML = current.rows.length ? table(current.rows) + '<button type="button" class="kolrrhh-btn kolrrhh-btn-primary" id="kolrrhh-basicos-update">Actualizar</button>' : '<p>No hay basicos vigentes.</p>';
+        body.querySelector('#kolrrhh-basicos-update')?.addEventListener('click', openModal);
+      } catch(error) { if (body.isConnected) body.textContent = error.message; }
+    }
+    function openModal() {
+      const source = current;
+      const modal = document.createElement('dialog');
+      modal.className = 'kolrrhh-ventas-dialog kolrrhh-basicos-dialog';
+      modal.setAttribute('aria-labelledby','kolrrhh-basicos-title');
+      modal.innerHTML = `<form><div class="kolrrhh-modal-top"><h2 class="kolrrhh-modal-title" id="kolrrhh-basicos-title">Actualizar basicos</h2><button type="button" class="kolrrhh-modal-x" data-close aria-label="Cerrar">&times;</button></div><div class="kolrrhh-ventas-content"><div class="kolrrhh-basicos-controls"><label>Incremento (%)<input class="kolrrhh-modal-input" type="text" inputmode="decimal" id="kolrrhh-basicos-percentage" placeholder="Ej.: 5" autocomplete="off"></label><button type="button" class="kolrrhh-btn kolrrhh-btn-secondary" data-calculate>Calcular</button></div><p>Cada calculo aplica el porcentaje a los montos actuales. Al guardar, los nuevos basicos quedan vigentes desde ahora y se conserva el historial anterior.</p><div data-preview>${table(source.rows)}</div><p role="alert" class="kolrrhh-ventas-error"></p></div><div class="kolrrhh-modal-actions"><button type="button" class="kolrrhh-btn kolrrhh-btn-secondary" data-close>Cancelar</button><button type="submit" class="kolrrhh-btn kolrrhh-btn-primary" data-save disabled>Guardar</button></div></form>`;
+      document.body.appendChild(modal);
+      const input = modal.querySelector('input'); const save = modal.querySelector('[data-save]'); const errorBox = modal.querySelector('[role="alert"]');
+      let applied = null; let saving = false;
+      modal.querySelectorAll('[data-close]').forEach(button => { button.onclick = () => modal.close(); });
+      modal.addEventListener('cancel', event => { if(saving) event.preventDefault(); });
+      modal.addEventListener('close', () => { modal.remove(); document.getElementById('kolrrhh-basicos-update')?.focus(); });
+      input.addEventListener('input', () => { applied = null; save.disabled = true; errorBox.textContent = ''; modal.querySelector('[data-preview]').innerHTML = table(source.rows); });
+      modal.querySelector('[data-calculate]').onclick = () => {
+        const raw = input.value.trim().replace(',','.');
+        if (!/^\d{1,4}(?:\.\d{1,4})?$/.test(raw) || Number(raw)<=0) { errorBox.textContent = 'Ingresa un porcentaje mayor a cero, con hasta cuatro decimales.'; return; }
+        applied = raw; errorBox.textContent = '';
+        modal.querySelector('[data-preview]').innerHTML = table(source.rows,Number(applied));
+        save.disabled = false;
+      };
+      modal.querySelector('form').onsubmit = async event => {
+        event.preventDefault(); if(saving || applied === null) return;
+        saving = true; errorBox.textContent = '';
+        modal.querySelectorAll('button,input').forEach(el => { el.disabled = true; });
+        try {
+          await request('update',{percentage:applied, snapshot:source.snapshot});
+          modal.close(); if(document.getElementById('kolrrhh-basicos-body')) await render();
+        } catch(error) { errorBox.textContent = error.message; }
+        finally { saving = false; modal.querySelectorAll('button,input').forEach(el => { el.disabled = false; }); }
+      };
+      modal.showModal();
+    }
+    trigger.addEventListener('click', () => {
+      document.dispatchEvent(new Event('kolrrhh:basicos-open'));
+      document.getElementById('kolrrhh-main-menu-wrap').open = false;
+      document.querySelectorAll('.kolrrhh-item.is-selected').forEach(el => el.classList.remove('is-selected'));
+      document.querySelectorAll('.kolrrhh-tabs,.kolrrhh-tabpanes').forEach(el => el.classList.add('kolrrhh-hidden'));
+      render();
+    });
+  });
+})();

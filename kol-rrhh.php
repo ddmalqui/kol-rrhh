@@ -34,7 +34,114 @@ final class KOL_RRHH_Plugin {
     add_action('wp_ajax_kol_rrhh_view_editable_status', [$this,'ajax_view_editable_status']);
     add_action('wp_ajax_kol_rrhh_get_editable_status', [$this,'ajax_get_editable_status']);
     add_action('wp_ajax_kol_rrhh_toggle_editable_status', [$this,'ajax_toggle_editable_status']);
+    add_action('wp_ajax_kol_rrhh_get_ventas_mensuales', [$this, 'ajax_get_ventas_mensuales']);
+    add_action('wp_ajax_kol_rrhh_save_ventas_mensuales', [$this, 'ajax_save_ventas_mensuales']);
+    add_action('wp_ajax_kol_rrhh_get_basicos', [$this,'ajax_get_basicos']);
+    add_action('wp_ajax_kol_rrhh_update_basicos', [$this,'ajax_update_basicos']);
     add_shortcode(self::SHORTCODE, [$this,'shortcode']);
+  }
+
+
+  private function ventas_schema(){
+    global $wpdb;
+    $table = $wpdb->prefix . 'kol_ventas_mensuales';
+    $locals = $wpdb->prefix . 'kol_locales';
+    $pick = function($table, $fields) use ($wpdb){
+      $cols = $wpdb->get_col("SHOW COLUMNS FROM `{$table}`", 0) ?: [];
+      $out = [];
+      foreach ($fields as $key => $names) {
+        foreach ($names as $name) {
+          if (in_array($name, $cols, true)) { $out[$key] = $name; break; }
+        }
+        if (!isset($out[$key])) wp_send_json_error(['message' => 'No se detecto la columna ' . $key . ' en ' . $table]);
+      }
+      return $out;
+    };
+    return [$table, $locals, $pick($table, [
+      'local' => ['local_id','local','id_local','locales_id','id_locales'],
+      'year' => ['anio','ano','año'], 'month' => ['mes'],
+      'amount' => ['ventas','monto','importe','total','monto_ventas'],
+      'date' => ['fecha_carga','created_at','fecha','fecha_creacion','fecha_registro']
+    ]), $pick($locals, ['id' => ['id','local_id','id_local'], 'name' => ['nombre','name']])];
+  }
+
+  private function ventas_data($schema){
+    global $wpdb;
+    list($table, $locals, $v, $l) = $schema;
+    $rows = $wpdb->get_results("SELECT v.`{$v['local']}` AS local_id, l.`{$l['name']}` AS nombre,
+      v.`{$v['year']}` AS anio, v.`{$v['month']}` AS mes, v.`{$v['amount']}` AS monto,
+      v.`{$v['date']}` AS fecha_carga FROM `{$table}` v LEFT JOIN `{$locals}` l
+      ON l.`{$l['id']}` = v.`{$v['local']}` ORDER BY v.`{$v['year']}`, v.`{$v['month']}` + 0, v.`{$v['local']}`", ARRAY_A);
+    if ($wpdb->last_error) wp_send_json_error(['message' => 'No se pudieron consultar las ventas.']);
+    $groups = [];
+    foreach ($rows as $row) {
+      $key = sprintf('%04d-%02d', $row['anio'], $row['mes']);
+      if (!isset($groups[$key])) $groups[$key] = ['period' => $key, 'editable' => $this->sueldo_period_editable_status($key . '-01') === 1, 'rows' => []];
+      $groups[$key]['rows'][] = $row;
+    }
+    ksort($groups);
+    $next = $groups ? date('Y-m', strtotime(array_key_last($groups) . '-01 +1 month')) : current_time('Y-m');
+    $localRows = $wpdb->get_results("SELECT `{$l['id']}` AS id, `{$l['name']}` AS nombre FROM `{$locals}` ORDER BY `{$l['name']}`", ARRAY_A);
+    if ($wpdb->last_error) wp_send_json_error(['message' => 'No se pudieron consultar los locales.']);
+    return ['groups' => array_values($groups), 'locales' => $localRows, 'next' => $next,
+      'next_editable' => $this->sueldo_period_editable_status($next . '-01') === 1];
+  }
+
+  public function ajax_get_ventas_mensuales(){
+    check_ajax_referer('kol_rrhh_nonce', 'nonce');
+    $this->ajax_require_plugin_access();
+    wp_send_json_success($this->ventas_data($this->ventas_schema()));
+  }
+
+  public function ajax_save_ventas_mensuales(){
+    check_ajax_referer('kol_rrhh_nonce', 'nonce');
+    $this->ajax_require_plugin_access();
+    $period = isset($_POST['period']) ? sanitize_text_field(wp_unslash($_POST['period'])) : '';
+    if (!preg_match('/^[0-9]{4}-(0[1-9]|1[0-2])$/', $period)) wp_send_json_error(['message' => 'Periodo invalido.']);
+    if ($this->sueldo_period_editable_status($period . '-01') !== 1) wp_send_json_error(['message' => 'El mes debe estar abierto en BLOQUEAR EDICION.']);
+    $values = isset($_POST['values']) ? json_decode(wp_unslash($_POST['values']), true) : null;
+    if (!is_array($values)) wp_send_json_error(['message' => 'Importes invalidos.']);
+    global $wpdb;
+    $schema = $this->ventas_schema();
+    list($table, $locals, $v, $l) = $schema;
+    // Serialize submissions to avoid duplicate inserts from simultaneous month creation.
+    $lock = 'kol_rrhh_ventas_' . md5($table);
+    if ((int)$wpdb->get_var($wpdb->prepare('SELECT GET_LOCK(%s, 5)', $lock)) !== 1) wp_send_json_error(['message' => 'Otra carga esta en curso. Reintenta.']);
+    $error = '';
+    try {
+      $data = $this->ventas_data($schema);
+      $existing = [];
+      foreach ($data['groups'] as $group) if ($group['period'] === $period) $existing = $group['rows'];
+      if (!$existing && $period !== $data['next']) throw new Exception('Solo se puede agregar el mes correlativo: ' . $data['next']);
+      $allowed = array_map('strval', array_column($data['locales'], 'id'));
+      foreach ($existing as $row) $allowed[] = (string)$row['local_id'];
+      foreach ($values as $id => $amount) {
+        if (!in_array((string)$id, $allowed, true) || !is_scalar($amount) || ($amount !== '' && !preg_match('/^\d+(?:\.\d{1,2})?$/', (string)$amount))) throw new Exception('Local o importe invalido. Usa importes positivos con hasta dos decimales.');
+      }
+      if ($wpdb->query('START TRANSACTION') === false) throw new Exception('No se pudo iniciar el guardado.');
+      foreach ($values as $id => $amount) {
+        $where = [$v['year'] => (int)substr($period, 0, 4), $v['month'] => (int)substr($period, 5, 2), $v['local'] => (int)$id];
+        $prior = null;
+        foreach ($existing as $row) if ((string)$row['local_id'] === (string)$id) { $prior = $row; break; }
+        if ($amount === '') {
+          $result = $prior ? $wpdb->delete($table, $where) : 0;
+        } elseif ($prior) {
+          $result = $wpdb->update($table, [$v['amount'] => $amount], $where);
+        } else {
+          $result = $wpdb->insert($table, array_merge($where, [$v['amount'] => $amount, $v['date'] => current_time('mysql')]));
+        }
+        if ($result === false) throw new Exception('No se pudieron guardar las ventas.');
+      }
+      if ($wpdb->query('COMMIT') === false) throw new Exception('No se pudo confirmar el guardado.');
+      $this->audit_log('save', $table, ['period' => $period, 'before' => $existing, 'values' => $values]);
+    } catch (Exception $e) {
+      $wpdb->query('ROLLBACK');
+      $error = $e->getMessage();
+    } finally {
+      $wpdb->get_var($wpdb->prepare('SELECT RELEASE_LOCK(%s)', $lock));
+    }
+    if ($error) wp_send_json_error(['message' => $error]);
+    wp_send_json_success(['message' => 'Ventas guardadas.']);
   }
 
   public function register_assets(){
@@ -167,6 +274,114 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
     $email = strtolower(trim((string)($user->user_email ?? '')));
     if ($email === '') return false;
     return in_array($email, $this->allowed_access_emails(), true);
+  }
+
+  private function can_manage_basicos(){
+    if (!is_user_logged_in()) return false;
+    $user = wp_get_current_user();
+    return strtolower(trim((string)$user->user_login)) === 'ddmalqui'
+      || strtolower(trim((string)$user->user_email)) === 'ddmalqui@gmail.com';
+  }
+
+  private function basicos_end_column($cols){
+    foreach (['vigente_hasta','vigencia_hasta','fecha_hasta','fecha_fin','fecha_caducidad','fecha_caducidad_basico','hasta'] as $name) {
+      if (in_array($name, $cols, true)) return $name;
+    }
+    return '';
+  }
+
+  private function basicos_schema(){
+    global $wpdb;
+    $table = $wpdb->prefix . 'kol_rrhh_basicos';
+    $cols = $wpdb->get_col("SHOW COLUMNS FROM `{$table}`", 0) ?: [];
+    $fields = ['id'=>['id','basico_id'], 'role'=>['rol_id','role_id','id_rol','roles_id'],
+      'hours'=>['banda_horas_id','hora_banda_id','horas_banda_id','banda_id','id_banda','horas_id','id_horas'],
+      'amount'=>['base','basico','monto','valor'],
+      'start'=>['vigente_desde','vigencia_desde','fecha_desde','fecha_inicio','desde']];
+    $out = ['end'=>$this->basicos_end_column($cols)];
+    foreach ($fields as $key=>$names) {
+      $out[$key] = '';
+      foreach ($names as $name) if (in_array($name,$cols,true)) { $out[$key]=$name; break; }
+    }
+    if (in_array('', $out, true)) throw new Exception('No se detectaron las columnas de basicos. Revisar nombres de identificador, monto y fechas de vigencia.');
+    return [$table, $out];
+  }
+
+  private function basicos_current($schema, $lock = false){
+    global $wpdb;
+    list($table,$c) = $schema;
+    $rows = $wpdb->get_results("SELECT * FROM `{$table}` WHERE `{$c['end']}` IS NULL ORDER BY `{$c['id']}`" . ($lock ? ' FOR UPDATE' : ''), ARRAY_A);
+    if ($wpdb->last_error) throw new Exception('No se pudieron consultar los basicos.');
+    return $rows;
+  }
+
+  private function basicos_snapshot($rows){
+    return hash('sha256', wp_json_encode($rows));
+  }
+
+  public function ajax_get_basicos(){
+    check_ajax_referer('kol_rrhh_nonce','nonce');
+    if (!$this->can_manage_basicos()) wp_send_json_error(['message'=>'No tenes permiso para consultar basicos.'],403);
+    global $wpdb;
+    try {
+      $schema = $this->basicos_schema(); list($table,$c)=$schema;
+      $rows = $this->basicos_current($schema);
+      $lookup = function($suffix,$ids,$labels) use ($wpdb){
+        $t=$wpdb->prefix.$suffix; $cols=$wpdb->get_col("SHOW COLUMNS FROM `{$t}`",0) ?: [];
+        $id=''; $label='';
+        foreach($ids as $name) if(in_array($name,$cols,true)){ $id=$name; break; }
+        foreach($labels as $name) if(in_array($name,$cols,true)){ $label=$name; break; }
+        if(!$id || !$label) throw new Exception('No se pudieron detectar roles u horas.');
+        $result=$wpdb->get_results("SELECT `{$id}` AS id, `{$label}` AS label FROM `{$t}`",ARRAY_A);
+        if($wpdb->last_error) throw new Exception('No se pudieron consultar roles u horas.');
+        return array_column($result,'label','id');
+      };
+      $roles=$lookup('kol_rrhh_roles',['id','rol_id','id_rol'],['nombre','rol','name','descripcion']);
+      $hours=$lookup('kol_rrhh_horas_bandas',['id','horas_id','id_horas'],['horas','cantidad','valor']);
+      $result=[];
+      foreach($rows as $r) $result[]=['id'=>$r[$c['id']], 'role_id'=>$r[$c['role']], 'role'=>$roles[$r[$c['role']]] ?? ('Rol '.$r[$c['role']]),
+        'hours_id'=>$r[$c['hours']], 'hours'=>$hours[$r[$c['hours']]] ?? $r[$c['hours']], 'amount'=>$r[$c['amount']], 'since'=>$r[$c['start']]];
+      $response=['rows'=>$result,'snapshot'=>$this->basicos_snapshot($rows)];
+    } catch(Exception $e){ wp_send_json_error(['message'=>$e->getMessage()]); }
+    wp_send_json_success($response);
+  }
+
+  public function ajax_update_basicos(){
+    check_ajax_referer('kol_rrhh_nonce','nonce');
+    if (!$this->can_manage_basicos()) wp_send_json_error(['message'=>'No tenes permiso para actualizar basicos.'],403);
+    $pct=isset($_POST['percentage']) ? trim(wp_unslash($_POST['percentage'])) : '';
+    if(!preg_match('/^\d{1,4}(?:\.\d{1,4})?$/',$pct) || (float)$pct<=0) wp_send_json_error(['message'=>'Ingresa un porcentaje mayor a cero, con hasta cuatro decimales.']);
+    $snapshot=isset($_POST['snapshot']) ? sanitize_text_field(wp_unslash($_POST['snapshot'])) : '';
+    global $wpdb; $started=false;
+    try {
+      $schema=$this->basicos_schema(); list($table,$c)=$schema;
+      $engine=$wpdb->get_var($wpdb->prepare('SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s',$table));
+      if(strtoupper((string)$engine)!=='INNODB') throw new Exception('La tabla debe usar InnoDB para actualizar la vigencia sin guardados parciales.');
+      if($wpdb->query('START TRANSACTION')===false) throw new Exception('No se pudo iniciar la actualizacion.');
+      $started=true;
+      $rows=$this->basicos_current($schema,true);
+      if(!$rows) throw new Exception('No hay basicos vigentes para actualizar.');
+      if(!hash_equals($this->basicos_snapshot($rows),$snapshot)) throw new Exception('Los basicos cambiaron. Cerra el modal y volve a cargar la tabla antes de actualizar.');
+      $now=current_time('mysql');
+      $columns=$wpdb->get_results("SHOW COLUMNS FROM `{$table}`",ARRAY_A);
+      if($wpdb->last_error) throw new Exception('No se pudo verificar la estructura de basicos.');
+      foreach($rows as $row){
+        $amount=$row[$c['amount']];
+        if(!is_numeric($amount) || (float)$amount<0) throw new Exception('Hay un monto actual invalido.');
+        $newAmount=round((float)$amount*(1+(float)$pct/100),2);
+        if(!is_finite($newAmount)) throw new Exception('El monto calculado es demasiado grande.');
+        if($wpdb->update($table,[$c['end']=>$now],[$c['id']=>$row[$c['id']],$c['end']=>null])!==1) throw new Exception('No se pudo cerrar la vigencia anterior.');
+        $new=$row;
+        foreach($columns as $column) if(stripos($column['Extra'],'auto_increment')!==false || stripos($column['Extra'],'GENERATED')!==false) unset($new[$column['Field']]);
+        unset($new[$c['id']]);
+        $new[$c['amount']]=number_format($newAmount,2,'.',''); $new[$c['start']]=$now; $new[$c['end']]=null;
+        if($wpdb->insert($table,$new)===false) throw new Exception('No se pudieron crear los nuevos basicos. No se guardaron cambios.');
+      }
+      if($wpdb->query('COMMIT')===false) throw new Exception('No se pudo confirmar la actualizacion.');
+      $started=false;
+      $this->audit_log('update_basicos',$table,['percentage'=>$pct,'since'=>$now,'previous_ids'=>array_column($rows,$c['id'])]);
+    } catch(Exception $e){ if($started) $wpdb->query('ROLLBACK'); wp_send_json_error(['message'=>$e->getMessage()]); }
+    wp_send_json_success(['message'=>'Basicos actualizados.']);
   }
 
   private function can_manage_editable_status(){
@@ -333,6 +548,8 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
       return 0.0;
     }
 
+    $endColumn = $this->basicos_end_column($cols_b);
+    $activeSql = $endColumn ? " AND b.`{$endColumn}` IS NULL" : "";
     $sql = "
       SELECT b.{$colBase} AS base
       FROM {$t_basicos} b
@@ -340,6 +557,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
       INNER JOIN {$t_horas} h ON h.{$colHorasId} = b.{$colHorasIdB}
       WHERE r.{$colRoleName} = %s
         AND CAST(h.{$colHorasVal} AS DECIMAL(10,2)) = %f
+        {$activeSql}
       LIMIT 1
     ";
 
@@ -1102,8 +1320,12 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
                   <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-history" role="menuitem">HISTORIAL</button>
                   <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-mensual-local" role="menuitem">MENSUAL / LOCAL</button>
                   <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-locales" role="menuitem">LOCALES</button>
+                  <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-ventas" role="menuitem">Ventas Mensuales</button>
                   <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-log" role="menuitem">LOG</button>
                   <button type="button" class="kolrrhh-menu-item" id="kolrrhh-add" role="menuitem">AGREGAR PERSONAL</button>
+                  <?php if ($this->can_manage_basicos()): ?>
+                    <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-basicos" role="menuitem">Basicos</button>
+                  <?php endif; ?>
                   <?php if ($this->can_manage_editable_status()): ?>
                     <button type="button" class="kolrrhh-menu-item" id="kolrrhh-open-editable-status" role="menuitem">BLOQUEAR EDICION</button>
                   <?php endif; ?>
@@ -2757,6 +2979,8 @@ foreach (['banda_horas_id','hora_banda_id','horas_banda_id','banda_id','id_banda
     wp_send_json_error(['message' => 'No se pudieron detectar columnas necesarias en basicos/roles/horas_bandas.']);
   }
 
+  $endColumn = $this->basicos_end_column($cols_b);
+  $activeSql = $endColumn ? " AND b.`{$endColumn}` IS NULL" : "";
   // Query: basicos -> roles (por nombre) + horas_bandas (por horas)
   $sql = "
     SELECT b.{$colBase} AS base
@@ -2765,6 +2989,7 @@ foreach (['banda_horas_id','hora_banda_id','horas_banda_id','banda_id','id_banda
     INNER JOIN {$t_horas} h ON h.{$colHorasId} = b.{$colHorasIdB}
     WHERE r.{$colRoleName} = %s
       AND CAST(h.{$colHorasVal} AS CHAR) = %s
+      {$activeSql}
     LIMIT 1
   ";
 
