@@ -3483,6 +3483,12 @@ if (!$rol || !$area) {
     'vac_no_tomadas' => $vac_no_tomadas,
     'aguinaldo' => $aguinaldo
   ];
+  // Campos ocultos de empleado: limpiar tanto en altas como en modificaciones.
+  if ($tipo_liquidacion === 'monotributista') {
+    foreach (['jornada', 'bono', 'descuentos', 'vac_tomadas', 'feriados', 'liquidacion', 'vac_no_tomadas', 'aguinaldo'] as $field) {
+      $data[$field] = 0;
+    }
+  }
   $calc = $this->kol_rrhh_calculate_sueldo_breakdown($data, $employee);
   foreach ($this->sueldo_calculated_fields() as $field) {
     $data[$field] = $this->kol_rrhh_parse_decimal($calc[$field] ?? 0);

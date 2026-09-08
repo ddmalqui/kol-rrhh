@@ -3344,6 +3344,13 @@ if (finSel) finSel.addEventListener('change', () => {
         payload.set('vac_no_tomadas', getVal('kolrrhh-sueldo-vac-no-tomadas') || '0');
         payload.set('aguinaldo', getVal('kolrrhh-sueldo-aguinaldo') || '0');
 
+        // No enviar valores de la pestana Empleado al guardar un monotributista.
+        if (payload.get('tipo_liquidacion') === 'monotributista') {
+          ['jornada', 'bono', 'descuentos', 'vac_tomadas', 'feriados', 'liquidacion', 'vac_no_tomadas', 'aguinaldo'].forEach(field => {
+            payload.set(field, '0');
+          });
+        }
+
         clearSueldoError();
         sueldoSaveBtn.disabled = true;
         sueldoSaveBtn.classList.add('is-loading');
