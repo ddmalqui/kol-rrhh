@@ -2419,6 +2419,28 @@ private function sueldo_period_editable_status($periodIso){
   return null;
 }
 
+private function lock_haber_item_for_edit($id) {
+  global $wpdb;
+  $wpdb->query('START TRANSACTION');
+  register_shutdown_function(function () use ($wpdb) { $wpdb->query('ROLLBACK'); });
+  $table = $this->sueldos_items_table();
+  $wpdb->get_var($wpdb->prepare("SELECT id FROM {$table} WHERE id = %d FOR UPDATE", $id));
+}
+
+private function admin_haberes_paid($id = 0) {
+  global $wpdb;
+  $table = $wpdb->prefix . 'kol_pagos';
+  static $available = null;
+  if ($available === null) {
+    $available = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)) === $table
+      && in_array('rrhh_item_id', $wpdb->get_col("SHOW COLUMNS FROM {$table}", 0) ?: [], true);
+  }
+  if (!$available) return [];
+  $sql = "SELECT rrhh_item_id, modo_pago, pago_id FROM {$table} WHERE rrhh_item_id IS NOT NULL";
+  if ($id > 0) $sql .= $wpdb->prepare(' AND rrhh_item_id = %d FOR UPDATE', $id);
+  return $wpdb->get_results($sql, ARRAY_A) ?: [];
+}
+
 public function ajax_get_sueldo_items(){
   if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
     wp_send_json_error(['message' => 'Nonce inválido']);
@@ -2476,6 +2498,11 @@ public function ajax_get_sueldo_items(){
     unset($row);
   }
 
+  $paid = [];
+  foreach ($this->admin_haberes_paid() as $payment) $paid[$payment['rrhh_item_id']][$payment['modo_pago']] = (int) $payment['pago_id'];
+  $rows = $rows ?: [];
+  foreach ($rows as &$row) $row['pagos_haberes'] = $paid[$row['id']] ?? [];
+  unset($row);
   wp_send_json_success(['rows' => $rows ?: []]);
 }
 
@@ -3284,6 +3311,8 @@ public function ajax_delete_sueldo_item(){
     wp_send_json_error(['message' => 'La tabla de sueldos no existe']);
   }
 
+  $this->lock_haber_item_for_edit($id);
+  if ($this->admin_haberes_paid($id)) wp_send_json_error(['message' => 'El item tiene haberes pagados y no se puede eliminar.']);
   $before = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $id), ARRAY_A);
   if ($before && intval($before['editable'] ?? 1) !== 1) {
     wp_send_json_error(['message' => 'El mes ya fue cerrado']);
@@ -3297,6 +3326,7 @@ public function ajax_delete_sueldo_item(){
     wp_send_json_error(['message' => 'El item ya no existe']);
   }
 
+  $wpdb->query('COMMIT');
   $this->audit_log('delete', $table, [
     'id' => $id,
     'deleted_row' => $before,
@@ -3441,6 +3471,8 @@ if (!$rol || !$area) {
   $this->ensure_sueldos_aguinaldo_column();
   $this->ensure_sueldos_calculated_columns();
 
+  if ($id > 0) $this->lock_haber_item_for_edit($id);
+  if ($id > 0 && $this->admin_haberes_paid($id)) wp_send_json_error(['message' => 'El item tiene haberes pagados y no se puede modificar.']);
   if ($id > 0) {
     $existingEditable = $wpdb->get_var($wpdb->prepare("SELECT editable FROM {$table} WHERE id = %d", $id));
     if ($existingEditable !== null && intval($existingEditable) !== 1) {
@@ -3507,6 +3539,7 @@ $formats = ['%d','%s','%s','%f','%s','%f','%s','%f','%s','%f','%f','%f','%f','%f
         'after' => $row,
       ]);
     }
+    $wpdb->query('COMMIT');
     wp_send_json_success(['row' => $row]);
   } else {
     $ok = $wpdb->insert($table, $data, $formats);
@@ -4352,7 +4385,6 @@ private function render_print_html($items){
     .sheet { max-width: 780px; margin: 0 auto; }
     .print-item + .print-item { page-break-before: always; break-before: page; }
     .top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; border-bottom:1px solid #ddd; padding-bottom:12px; margin-bottom:14px; }
-    .brand { font-weight: 800; font-size: 14px; letter-spacing:.02em; }
     .muted { color:#555; }
     .h1 { font-weight: 900; font-size: 16px; margin: 2px 0 4px; }
     .section { margin-top: 14px; }
@@ -4363,8 +4395,6 @@ private function render_print_html($items){
     .right { text-align:right; }
     .center { text-align:center; }
     .note { margin-top: 12px; line-height: 1.45; }
-    .sign { display:flex; justify-content:space-between; gap: 18px; margin-top: 200px; }
-    .line { width: 48%; border-top: 1px solid #111; padding-top: 6px; text-align:center; font-weight:700; }
     .small { font-size: 11px; }
     .printbar { display:flex; justify-content:flex-end; margin: 8px 0 14px; }
     .btn { background:#111; color:#fff; border:0; padding:10px 12px; border-radius:10px; font-weight:800; cursor:pointer; }
@@ -4383,9 +4413,7 @@ private function render_print_html($items){
     <div class="print-item">
     <div class="top">
       <div>
-        <div class="brand">KOL ACCESORIOS</div>
         <div class="h1"><?php echo esc_html($d['nombre']); ?></div>
-        <div class="muted">Legajo: <strong><?php echo esc_html($d['legajo']); ?></strong></div>
       </div>
       <div class="muted">
         <div><strong>Período:</strong> <?php echo esc_html($d['mes_label']); ?></div>
@@ -4443,15 +4471,6 @@ private function render_print_html($items){
       </table>
     </div>
 
-    <div class="note">
-      Yo <strong><?php echo esc_html($d['nombre']); ?></strong> recibí de <strong>KOL ACCESORIOS</strong>
-      los haberes correspondientes al período <strong><?php echo esc_html($d['mes_label']); ?></strong>.
-    </div>
-    
-    <div class="sign">
-      <div class="line">Firma Empleado</div>
-      <div class="line">Firma Empleador</div>
-    </div>
     </div>
     <?php endforeach; ?>
   </div>

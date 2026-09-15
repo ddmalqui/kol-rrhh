@@ -1767,8 +1767,8 @@ async function refreshDesempenoPersonalDesempeno(){
               </thead>
               <tbody>
                 <tr>
-                  <td>${moneyAR(r.efectivo)}</td>
-                  <td>${moneyAR(r.transferencia)}</td>
+                  <td class="${r.pagos_haberes?.efectivo ? 'kolrrhh-haber-pagado' : ''}" title="${r.pagos_haberes?.efectivo ? 'Pagado en Administracion' : ''}">${moneyAR(r.efectivo)}</td>
+                  <td class="${r.pagos_haberes?.transferencia ? 'kolrrhh-haber-pagado' : ''}" title="${r.pagos_haberes?.transferencia ? 'Pagado en Administracion' : ''}">${moneyAR(r.transferencia)}</td>
                   <td>${moneyAR(r.creditos)}</td>
                 </tr>
               </tbody>

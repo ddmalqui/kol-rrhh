@@ -1711,3 +1711,5 @@ dialog.kolrrhh-basicos-dialog { width: min(1100px, calc(100vw - 32px)); }
 .kolrrhh-basicos-controls { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 .kolrrhh-basicos-controls label { font-size: 13px; font-weight: 800; }
 .kolrrhh-basicos-controls input.kolrrhh-modal-input { display: block; max-width: 180px; margin-top: 6px; text-align: left; }
+
+.kolrrhh-table td.kolrrhh-haber-pagado, td.kolrrhh-haber-pagado { background: #dcfce7 !important; color: #166534; }
