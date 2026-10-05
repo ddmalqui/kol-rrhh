@@ -1713,3 +1713,8 @@ dialog.kolrrhh-basicos-dialog { width: min(1100px, calc(100vw - 32px)); }
 .kolrrhh-basicos-controls .kolrrhh-modal-input { display: block; max-width: 180px; margin-top: 6px; text-align: left; }
 
 .kolrrhh-table td.kolrrhh-haber-pagado, td.kolrrhh-haber-pagado { background: #dcfce7 !important; color: #166534; }
+
+.kolrrhh-sueldo-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin:4px 0 14px; }
+.kolrrhh-sueldo-heading .kolrrhh-sueldo-tabs { margin:0; flex-wrap:wrap; }
+#kolrrhh-participacion-total { display:block; margin-left:auto; max-width:360px; text-align:right; font-size:11px; line-height:1.35; color:#64748b; }
+#kolrrhh-participacion-total.is-over-limit { color:#b42318; }

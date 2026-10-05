@@ -1131,6 +1131,41 @@ if (desempenoSaveBtn) {
     }
   }
 
+  let participationRequest = 0;
+  async function refreshParticipationTotal(){
+    const requestId = ++participationRequest;
+    const hint = qs('kolrrhh-participacion-total');
+    if (!hint) return;
+    const area = getVal('kolrrhh-sueldo-area');
+    const start = getVal('kolrrhh-sueldo-periodo-inicio');
+    const end = getVal('kolrrhh-sueldo-periodo-fin');
+    hint.classList.remove('is-over-limit');
+    if (!area || !start || !end || start.slice(0,7) !== end.slice(0,7)) {
+      hint.textContent = 'Selecciona local y fechas del mismo mes.';
+      return;
+    }
+    hint.textContent = 'Consultando participacion...';
+    const payload = new URLSearchParams({action:'kol_rrhh_get_participacion_total', nonce:KOL_RRHH.nonce,
+      area, periodo_inicio:start, id:getVal('kolrrhh-sueldo-id') || '0'});
+    try {
+      const response = await fetch(KOL_RRHH.ajaxurl, {method:'POST', body:payload});
+      const json = await response.json();
+      if (requestId !== participationRequest) return;
+      if (!json.success) throw new Error(json.data?.message || 'No se pudo consultar la participacion.');
+      const projected = Number(json.data.other_cents) + Math.round(getParticipacionValue()*100);
+      const number = cents => (cents/100).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
+      const period = start.slice(5,7) + '/' + start.slice(0,4);
+      hint.textContent = `${area} (${period}): asignado ${number(json.data.total_cents)} / 1,00. Con este item: ${number(projected)} / 1,00.`;
+      hint.classList.toggle('is-over-limit', projected > 100);
+      if (projected > 100) hint.textContent += ' Supera el limite.';
+    } catch(error){
+      if (requestId === participationRequest) hint.textContent = error.message;
+    }
+  }
+  document.addEventListener('change', event => {
+    if (['kolrrhh-sueldo-area','kolrrhh-sueldo-periodo-inicio','kolrrhh-sueldo-periodo-fin','kolrrhh-sueldo-participacion'].includes(event.target.id)) refreshParticipationTotal();
+  });
+
   function openSueldoModal(row, legajoNum){
     const modal = qs('kolrrhh-sueldo-modal');
     if(!modal) return;
@@ -1221,6 +1256,7 @@ if (horasSel) {
 if (partSel) {
   partSel.innerHTML = buildParticipacionOptions();
    partSel.value = normalizeParticipacion(row?.participacion ?? '0');
+   refreshParticipationTotal();
 
    partSel.addEventListener('change', () => {
   renderComisionFromState();

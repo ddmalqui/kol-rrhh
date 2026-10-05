@@ -19,6 +19,7 @@ final class KOL_RRHH_Plugin {
     add_action('wp_ajax_kol_rrhh_get_sueldo_items', [$this,'ajax_get_sueldo_items']);
     add_action('wp_ajax_kol_rrhh_get_historial_resumen', [$this,'ajax_get_historial_resumen']);
     add_action('wp_ajax_kol_rrhh_get_mensual_local', [$this,'ajax_get_mensual_local']);
+    add_action('wp_ajax_kol_rrhh_get_participacion_total', [$this,'ajax_get_participacion_total']);
     add_action('wp_ajax_kol_rrhh_save_sueldo_item', [$this,'ajax_save_sueldo_item']);
     add_action('wp_ajax_kol_rrhh_delete_sueldo_item', [$this,'ajax_delete_sueldo_item']);
     add_action('wp_ajax_kol_rrhh_get_desempeno_items', [$this,'ajax_get_desempeno_items']);
@@ -1650,6 +1651,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
       <input type="hidden" id="kolrrhh-sueldo-legajo" value="" />
       <input type="hidden" id="kolrrhh-sueldo-tipo" value="empleado" />
 
+      <div class="kolrrhh-sueldo-heading">
       <div class="kolrrhh-sueldo-tabs" role="tablist" aria-label="Tipo de liquidación">
         <button
           type="button"
@@ -1669,6 +1671,8 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
         >
           Monotributista
         </button>
+      </div>
+        <small id="kolrrhh-participacion-total" aria-live="polite"></small>
       </div>
 
 <div class="kolrrhh-form-row" style="--cols:7;">
@@ -1704,7 +1708,7 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
 
 <div class="kolrrhh-form-field">
   <label class="kolrrhh-modal-label">Participación</label>
-  <select id="kolrrhh-sueldo-participacion" class="kolrrhh-modal-input"></select>
+  <select id="kolrrhh-sueldo-participacion" class="kolrrhh-modal-input" aria-describedby="kolrrhh-participacion-total"></select>
 </div>
       </div>
 
@@ -3386,6 +3390,35 @@ public function ajax_delete_sueldo_item(){
 
 
 
+private function participacion_local_mes($area, $inicio, $exclude_id = 0){
+  global $wpdb;
+  $month=substr($inicio,0,7);
+  if(!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/',$month)) throw new Exception('Selecciona un mes valido.');
+  $from=$month.'-01';
+  $until=date('Y-m-d',strtotime($from.' +1 month'));
+  $table=$this->sueldos_items_table();
+  $row=$wpdb->get_row($wpdb->prepare(
+    "SELECT COALESCE(SUM(participacion),0) AS total,
+     COALESCE(SUM(CASE WHEN id <> %d THEN participacion ELSE 0 END),0) AS others
+     FROM {$table} WHERE area = %s AND periodo_inicio >= %s AND periodo_inicio < %s",
+    $exclude_id,$area,$from,$until
+  ),ARRAY_A);
+  if($wpdb->last_error || !$row) throw new Exception('No se pudo consultar la participacion del local.');
+  return ['total_cents'=>(int)round((float)$row['total']*100),'other_cents'=>(int)round((float)$row['others']*100)];
+}
+
+public function ajax_get_participacion_total(){
+  check_ajax_referer('kol_rrhh_nonce','nonce');
+  $this->ajax_require_plugin_access();
+  $area=sanitize_text_field(wp_unslash($_POST['area'] ?? ''));
+  $inicio=sanitize_text_field(wp_unslash($_POST['periodo_inicio'] ?? ''));
+  if($area==='') wp_send_json_error(['message'=>'Selecciona un area / local.']);
+  try {
+    $result=$this->participacion_local_mes($area,$inicio,absint($_POST['id'] ?? 0));
+  } catch(Exception $e){ wp_send_json_error(['message'=>$e->getMessage()]); }
+  wp_send_json_success($result);
+}
+
 public function ajax_save_sueldo_item(){
   if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
     wp_send_json_error(['message' => 'Nonce inválido']);
@@ -3462,9 +3495,9 @@ if (!$rol || !$area) {
 
   $rol      = isset($_POST['rol']) ? sanitize_text_field($_POST['rol']) : '';
   // Participación: decimal 0.00 a 1.00 (paso 0.05 en la UI)
-  $participacion = isset($_POST['participacion']) ? floatval(str_replace(',', '.', sanitize_text_field($_POST['participacion']))) : 0;
-  if ($participacion < 0) $participacion = 0;
-  if ($participacion > 1) $participacion = 1;
+  $partRaw=str_replace(',', '.', sanitize_text_field(wp_unslash($_POST['participacion'] ?? '0')));
+  if(!preg_match('/^(?:0(?:\.\d{1,2})?|1(?:\.0{1,2})?)$/',$partRaw)) wp_send_json_error(['message'=>'La participacion debe estar entre 0 y 1, con hasta dos decimales.']);
+  $participacion=(float)$partRaw;
 
   $area = isset($_POST['area']) ? sanitize_text_field($_POST['area']) : '';
 
@@ -3515,7 +3548,21 @@ if (!$rol || !$area) {
   $this->ensure_sueldos_aguinaldo_column();
   $this->ensure_sueldos_calculated_columns();
 
+  // Serialize participation changes, including transfers between areas/months.
+  // Acquire before the item transaction so its SUM sees the latest committed data.
+  $participationLock='kol_rrhh_part_'.md5(DB_NAME.':'.$table);
+  if((int)$wpdb->get_var($wpdb->prepare('SELECT GET_LOCK(%s, 5)',$participationLock))!==1) wp_send_json_error(['message'=>'Otra carga de participacion esta en curso. Reintenta.']);
+  register_shutdown_function(function() use ($wpdb,$participationLock){
+    $wpdb->query('ROLLBACK');
+    $wpdb->get_var($wpdb->prepare('SELECT RELEASE_LOCK(%s)',$participationLock));
+  });
   if ($id > 0) $this->lock_haber_item_for_edit($id);
+  try {
+    $participationTotals=$this->participacion_local_mes($area,$periodo_inicio,$id);
+    if($participationTotals['other_cents']+(int)round($participacion*100)>100) {
+      throw new Exception('La participacion total de '.$area.' en '.substr($periodo_inicio,0,7).' no puede superar 1. Disponible: '.number_format(max(0,100-$participationTotals['other_cents'])/100,2,',','.').'.');
+    }
+  } catch(Exception $e){ wp_send_json_error(['message'=>$e->getMessage()]); }
   if ($id > 0 && $this->admin_haberes_paid($id)) wp_send_json_error(['message' => 'El item tiene haberes pagados y no se puede modificar.']);
   if ($id > 0) {
     $existingEditable = $wpdb->get_var($wpdb->prepare("SELECT editable FROM {$table} WHERE id = %d", $id));
