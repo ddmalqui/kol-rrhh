@@ -304,7 +304,29 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
       foreach ($names as $name) if (in_array($name,$cols,true)) { $out[$key]=$name; break; }
     }
     if (in_array('', $out, true)) throw new Exception('No se detectaron las columnas de basicos. Revisar nombres de identificador, monto y fechas de vigencia.');
+    $this->ensure_basicos_datetime($table, $out);
     return [$table, $out];
+  }
+
+  private function ensure_basicos_datetime($table, $fields){
+    global $wpdb;
+    $columns=$wpdb->get_results("SHOW COLUMNS FROM `{$table}`", ARRAY_A);
+    if($wpdb->last_error) throw new Exception('No se pudo verificar la precision de las fechas de basicos.');
+    $changes=[];
+    foreach($columns as $column){
+      $name=$column['Field'];
+      if($name!==$fields['start'] && $name!==$fields['end']) continue;
+      $type=strtolower($column['Type']);
+      if($type==='date' || preg_match('/^datetime(?:\([0-5]\))?$/',$type)) {
+        $nullable=$column['Null']==='YES' ? 'NULL DEFAULT NULL' : 'NOT NULL';
+        $changes[]="MODIFY COLUMN `{$name}` DATETIME(6) {$nullable}";
+      }
+    }
+    // DDL must run before opening the salary update transaction. Keep the unique
+    // role/hours/start index and every historical row; only widen date precision.
+    if($changes && $wpdb->query("ALTER TABLE `{$table}` ".implode(', ', $changes))===false) {
+      throw new Exception('No se pudieron adaptar las fechas de basicos para permitir varios aumentos en el mismo dia.');
+    }
   }
 
   private function basicos_current($schema, $lock = false){
@@ -351,6 +373,8 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
     if (!$this->can_manage_basicos()) wp_send_json_error(['message'=>'No tenes permiso para actualizar basicos.'],403);
     $pct=isset($_POST['percentage']) ? trim(wp_unslash($_POST['percentage'])) : '';
     if(!preg_match('/^\d{1,4}(?:\.\d{1,4})?$/',$pct) || (float)$pct<=0) wp_send_json_error(['message'=>'Ingresa un porcentaje mayor a cero, con hasta cuatro decimales.']);
+    $role=isset($_POST['role_id']) ? wp_unslash($_POST['role_id']) : 'all';
+    if(!is_string($role) || ($role!=='all' && !preg_match('/^[1-9][0-9]*$/',$role))) wp_send_json_error(['message'=>'Selecciona un rol valido.']);
     $snapshot=isset($_POST['snapshot']) ? sanitize_text_field(wp_unslash($_POST['snapshot'])) : '';
     global $wpdb; $started=false;
     try {
@@ -362,7 +386,11 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
       $rows=$this->basicos_current($schema,true);
       if(!$rows) throw new Exception('No hay basicos vigentes para actualizar.');
       if(!hash_equals($this->basicos_snapshot($rows),$snapshot)) throw new Exception('Los basicos cambiaron. Cerra el modal y volve a cargar la tabla antes de actualizar.');
-      $now=current_time('mysql');
+      if($role!=='all') {
+        $rows=array_values(array_filter($rows,function($row) use ($c,$role){ return (string)$row[$c['role']]===$role; }));
+        if(!$rows) throw new Exception('El rol seleccionado no tiene basicos vigentes.');
+      }
+      $now=(new DateTimeImmutable('now', wp_timezone()))->format('Y-m-d H:i:s.u');
       $columns=$wpdb->get_results("SHOW COLUMNS FROM `{$table}`",ARRAY_A);
       if($wpdb->last_error) throw new Exception('No se pudo verificar la estructura de basicos.');
       foreach($rows as $row){
@@ -375,11 +403,27 @@ wp_localize_script('kol-rrhh-js', 'KOL_RRHH', [
         foreach($columns as $column) if(stripos($column['Extra'],'auto_increment')!==false || stripos($column['Extra'],'GENERATED')!==false) unset($new[$column['Field']]);
         unset($new[$c['id']]);
         $new[$c['amount']]=number_format($newAmount,2,'.',''); $new[$c['start']]=$now; $new[$c['end']]=null;
-        if($wpdb->insert($table,$new)===false) throw new Exception('No se pudieron crear los nuevos basicos. No se guardaron cambios.');
+        if($wpdb->insert($table,$new)===false) {
+          $dbError=(string)$wpdb->last_error;
+          $reference=wp_generate_uuid4();
+          error_log('[KOL RRHH basicos '.$reference.'] Insert failed: '.$dbError);
+          $reason='No se pudo insertar el nuevo basico.';
+          if(stripos($dbError,'Duplicate entry')!==false) {
+            $reason='La tabla rechazo el nuevo basico porque entra en conflicto con un registro existente.';
+            if(preg_match('/for key [\'"]([^\'"]+)[\'"]/i',$dbError,$match)) $reason.=' Restriccion: '.$match[1].'.';
+          } elseif(stripos($dbError,'Out of range')!==false) {
+            $reason='El nuevo importe supera el rango permitido por la tabla.';
+          } elseif(stripos($dbError,'Data too long')!==false) {
+            $reason='Un valor del nuevo basico supera el largo permitido por la tabla.';
+          } elseif(stripos($dbError,'foreign key constraint')!==false) {
+            $reason='El nuevo basico referencia un registro que no existe en una tabla relacionada.';
+          }
+          throw new Exception($reason.' No se guardaron cambios. Referencia: '.$reference);
+        }
       }
       if($wpdb->query('COMMIT')===false) throw new Exception('No se pudo confirmar la actualizacion.');
       $started=false;
-      $this->audit_log('update_basicos',$table,['percentage'=>$pct,'since'=>$now,'previous_ids'=>array_column($rows,$c['id'])]);
+      $this->audit_log('update_basicos',$table,['percentage'=>$pct,'role_id'=>$role,'since'=>$now,'previous_ids'=>array_column($rows,$c['id'])]);
     } catch(Exception $e){ if($started) $wpdb->query('ROLLBACK'); wp_send_json_error(['message'=>$e->getMessage()]); }
     wp_send_json_success(['message'=>'Basicos actualizados.']);
   }

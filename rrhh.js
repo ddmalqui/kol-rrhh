@@ -3615,14 +3615,15 @@ idsInputsSueldo.forEach(id => {
       if (!json.success) throw new Error(json.data?.message || 'No se pudo completar la operacion.');
       return json.data;
     }
-    function table(rows, percentage = null) {
+    function table(rows, percentage = null, roleId = 'all') {
       const hours = [...new Map(rows.map(r => [String(r.hours_id), r.hours])).entries()].sort((a,b) => Number(a[1])-Number(b[1]));
       const roles = [...new Map(rows.map(r => [String(r.role_id), r.role])).entries()].sort((a,b) => String(a[1]).localeCompare(String(b[1]),'es'));
       return `<div class="kolrrhh-basicos-scroll"><table class="kolrrhh-basicos-table"><thead><tr><th>Nombre del rol</th>${hours.map(([id,label]) => `<th>${esc(label)} hs</th>`).join('')}</tr></thead><tbody>${roles.map(([id,label]) => `<tr><th scope="row">${esc(label)}</th>${hours.map(([hour]) => {
         const matches = rows.filter(r => String(r.role_id)===id && String(r.hours_id)===hour);
         return `<td>${matches.length ? matches.map(r => {
-          const amount = percentage === null ? Number(r.amount) : Math.round((Number(r.amount)*(1+percentage/100)+Number.EPSILON)*100)/100;
-          return `<div class="kolrrhh-basicos-amount">${esc(money.format(amount))}</div><small>${percentage === null ? 'Vigente desde ' + esc(date(r.since)) : 'Actual: ' + esc(money.format(Number(r.amount)))}</small>`;
+          const affected = percentage !== null && (roleId === 'all' || String(r.role_id) === roleId);
+          const amount = !affected ? Number(r.amount) : Math.round((Number(r.amount)*(1+percentage/100)+Number.EPSILON)*100)/100;
+          return `<div class="kolrrhh-basicos-amount">${esc(money.format(amount))}</div><small>${!affected ? 'Vigente desde ' + esc(date(r.since)) : 'Actual: ' + esc(money.format(Number(r.amount)))}</small>`;
         }).join('<hr>') : '&mdash;'}</td>`;
       }).join('')}</tr>`).join('')}</tbody></table></div>`;
     }
@@ -3640,33 +3641,37 @@ idsInputsSueldo.forEach(id => {
     }
     function openModal() {
       const source = current;
+      const roles = [...new Map(source.rows.map(row => [String(row.role_id), row.role])).entries()].sort((a,b) => String(a[1]).localeCompare(String(b[1]), 'es'));
       const modal = document.createElement('dialog');
       modal.className = 'kolrrhh-ventas-dialog kolrrhh-basicos-dialog';
       modal.setAttribute('aria-labelledby','kolrrhh-basicos-title');
-      modal.innerHTML = `<form><div class="kolrrhh-modal-top"><h2 class="kolrrhh-modal-title" id="kolrrhh-basicos-title">Actualizar basicos</h2><button type="button" class="kolrrhh-modal-x" data-close aria-label="Cerrar">&times;</button></div><div class="kolrrhh-ventas-content"><div class="kolrrhh-basicos-controls"><label>Incremento (%)<input class="kolrrhh-modal-input" type="text" inputmode="decimal" id="kolrrhh-basicos-percentage" placeholder="Ej.: 5" autocomplete="off"></label><button type="button" class="kolrrhh-btn kolrrhh-btn-secondary" data-calculate>Calcular</button></div><p>Cada calculo aplica el porcentaje a los montos actuales. Al guardar, los nuevos basicos quedan vigentes desde ahora y se conserva el historial anterior.</p><div data-preview>${table(source.rows)}</div><p role="alert" class="kolrrhh-ventas-error"></p></div><div class="kolrrhh-modal-actions"><button type="button" class="kolrrhh-btn kolrrhh-btn-secondary" data-close>Cancelar</button><button type="submit" class="kolrrhh-btn kolrrhh-btn-primary" data-save disabled>Guardar</button></div></form>`;
+      modal.innerHTML = `<form><div class="kolrrhh-modal-top"><h2 class="kolrrhh-modal-title" id="kolrrhh-basicos-title">Actualizar basicos</h2><button type="button" class="kolrrhh-modal-x" data-close aria-label="Cerrar">&times;</button></div><div class="kolrrhh-ventas-content"><div class="kolrrhh-basicos-controls"><label>Incremento (%)<input class="kolrrhh-modal-input" type="text" inputmode="decimal" id="kolrrhh-basicos-percentage" placeholder="Ej.: 5" autocomplete="off"></label><label>Nombre del rol<select class="kolrrhh-modal-input" id="kolrrhh-basicos-role"><option value="all">Todos</option>${roles.map(([id,label]) => `<option value="${esc(id)}">${esc(label)}</option>`).join('')}</select></label><button type="button" class="kolrrhh-btn kolrrhh-btn-secondary" data-calculate>Calcular</button></div><p>Cada calculo aplica el porcentaje a los montos actuales del rol seleccionado o de todos los roles. Al guardar, los nuevos basicos quedan vigentes desde ahora y se conserva el historial anterior.</p><div data-preview>${table(source.rows)}</div><p role="alert" class="kolrrhh-ventas-error"></p></div><div class="kolrrhh-modal-actions"><button type="button" class="kolrrhh-btn kolrrhh-btn-secondary" data-close>Cancelar</button><button type="submit" class="kolrrhh-btn kolrrhh-btn-primary" data-save disabled>Guardar</button></div></form>`;
       document.body.appendChild(modal);
+      const roleSelect = modal.querySelector('#kolrrhh-basicos-role');
       const input = modal.querySelector('input'); const save = modal.querySelector('[data-save]'); const errorBox = modal.querySelector('[role="alert"]');
       let applied = null; let saving = false;
       modal.querySelectorAll('[data-close]').forEach(button => { button.onclick = () => modal.close(); });
       modal.addEventListener('cancel', event => { if(saving) event.preventDefault(); });
       modal.addEventListener('close', () => { modal.remove(); document.getElementById('kolrrhh-basicos-update')?.focus(); });
-      input.addEventListener('input', () => { applied = null; save.disabled = true; errorBox.textContent = ''; modal.querySelector('[data-preview]').innerHTML = table(source.rows); });
+      const resetPreview = () => { applied = null; save.disabled = true; errorBox.textContent = ''; modal.querySelector('[data-preview]').innerHTML = table(source.rows); };
+      input.addEventListener('input', resetPreview);
+      roleSelect.addEventListener('change', resetPreview);
       modal.querySelector('[data-calculate]').onclick = () => {
         const raw = input.value.trim().replace(',','.');
         if (!/^\d{1,4}(?:\.\d{1,4})?$/.test(raw) || Number(raw)<=0) { errorBox.textContent = 'Ingresa un porcentaje mayor a cero, con hasta cuatro decimales.'; return; }
         applied = raw; errorBox.textContent = '';
-        modal.querySelector('[data-preview]').innerHTML = table(source.rows,Number(applied));
+        modal.querySelector('[data-preview]').innerHTML = table(source.rows,Number(applied),roleSelect.value);
         save.disabled = false;
       };
       modal.querySelector('form').onsubmit = async event => {
         event.preventDefault(); if(saving || applied === null) return;
         saving = true; errorBox.textContent = '';
-        modal.querySelectorAll('button,input').forEach(el => { el.disabled = true; });
+        modal.querySelectorAll('button,input,select').forEach(el => { el.disabled = true; });
         try {
-          await request('update',{percentage:applied, snapshot:source.snapshot});
+          await request('update',{percentage:applied, role_id:roleSelect.value, snapshot:source.snapshot});
           modal.close(); if(document.getElementById('kolrrhh-basicos-body')) await render();
         } catch(error) { errorBox.textContent = error.message; }
-        finally { saving = false; modal.querySelectorAll('button,input').forEach(el => { el.disabled = false; }); }
+        finally { saving = false; modal.querySelectorAll('button,input,select').forEach(el => { el.disabled = false; }); }
       };
       modal.showModal();
     }
