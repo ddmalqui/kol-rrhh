@@ -2643,6 +2643,37 @@ public function ajax_get_historial_resumen(){
   wp_send_json_success(['rows' => $rows]);
 }
 
+private function group_mensual_local_items($items, $paid){
+  $groups=[];
+  foreach($items as $item){
+    $key=json_encode([(string)$item['legajo'],(string)$item['area'],(string)$item['nombre']]);
+    if(!isset($groups[$key])) {
+      $groups[$key]=['nombre'=>$item['nombre'],'legajo'=>$item['legajo'],'area'=>$item['area'],
+        'transferencia'=>0,'efectivo'=>0,'creditos'=>0,
+        'pagos_haberes'=>['transferencia'=>true,'efectivo'=>true]];
+    }
+    foreach(['transferencia','efectivo','creditos'] as $mode){
+      $cents=(int)round((float)($item[$mode] ?? 0)*100);
+      $groups[$key][$mode]+=$cents;
+      if($mode!=='creditos' && $cents!==0 && empty($paid[$item['id']][$mode])) {
+        $groups[$key]['pagos_haberes'][$mode]=false;
+      }
+    }
+  }
+  $rows=[];
+  foreach($groups as $group){
+    $total=$group['transferencia']+$group['efectivo']+$group['creditos'];
+    if($total===0) continue;
+    foreach(['transferencia','efectivo'] as $mode) {
+      $group['pagos_haberes'][$mode]=$group[$mode]!==0 && $group['pagos_haberes'][$mode];
+    }
+    foreach(['transferencia','efectivo','creditos'] as $mode) $group[$mode]/=100;
+    $group['monto']=$total/100;
+    $rows[]=$group;
+  }
+  return $rows;
+}
+
 public function ajax_get_mensual_local(){
   if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'kol_rrhh_nonce')) {
     wp_send_json_error(['message' => 'Nonce invalido']);
@@ -2692,24 +2723,27 @@ public function ajax_get_mensual_local(){
   $sql = "
     SELECT
       COALESCE(NULLIF(e.nombre, ''), CONCAT('Legajo ', s.legajo)) AS nombre,
+      s.id AS id,
       s.legajo AS legajo,
       s.area AS area,
-      SUM(COALESCE(s.efectivo,0) + COALESCE(s.transferencia,0) + COALESCE(s.creditos,0)) AS monto
+      COALESCE(s.transferencia,0) AS transferencia,
+      COALESCE(s.efectivo,0) AS efectivo,
+      COALESCE(s.creditos,0) AS creditos
     FROM {$sueldoTable} s
     LEFT JOIN {$empTable} e ON CAST(e.legajo AS UNSIGNED) = CAST(s.legajo AS UNSIGNED)
     WHERE {$where}
-    GROUP BY s.legajo, s.area, e.nombre
-    HAVING monto <> 0
     ORDER BY nombre ASC, s.legajo ASC
   ";
 
   $rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A) ?: [];
-  $total = 0.0;
-  foreach ($rows as &$row) {
-    $row['monto'] = (float)($row['monto'] ?? 0);
-    $total += $row['monto'];
+  if($wpdb->last_error) wp_send_json_error(['message'=>'No se pudo consultar mensual/local.']);
+  $paid=[];
+  foreach($this->admin_haberes_paid() as $payment) {
+    $paid[$payment['rrhh_item_id']][$payment['modo_pago']]=(int)$payment['pago_id'];
   }
-  unset($row);
+  if($wpdb->last_error) wp_send_json_error(['message'=>'No se pudo consultar el estado de los pagos.']);
+  $rows=$this->group_mensual_local_items($rows,$paid);
+  $total=array_sum(array_column($rows,'monto'));
 
   wp_send_json_success([
     'month' => $month,

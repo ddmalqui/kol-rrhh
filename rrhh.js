@@ -2427,14 +2427,19 @@ function renderHistoryPanel(){
       body.innerHTML = `<tr><td class="kolrrhh-history-empty" colspan="${months.length + 1}">${escapeHtml(String(err?.message || 'Error al cargar historial.'))}</td></tr>`;
     });
 }
-function buildMensualLocalTableHtml(rows, total){
+function buildMensualLocalTableHtml(rows){
+  const columns = ['transferencia','efectivo','creditos','monto'];
+  const totals = columns.map(field => rows.reduce((sum,row) => sum + Math.round(Number(row[field] || 0)*100),0)/100);
   return `
     <div class="kolrrhh-tablewrap kolrrhh-history-wrap kolrrhh-mensual-local-wrap">
       <table class="kolrrhh-table kolrrhh-history-table kolrrhh-mensual-local-table">
         <thead>
           <tr>
             <th>Nombre del personal</th>
-            <th>Monto</th>
+            <th>Transferencia</th>
+            <th>Efectivo</th>
+            <th>Cr&eacute;dito</th>
+            <th>Total</th>
           </tr>
         </thead>
         <tbody>
@@ -2444,14 +2449,14 @@ function buildMensualLocalTableHtml(rows, total){
                 <div class="kolrrhh-history-person-name">${escapeHtml(String(row?.nombre || '—'))}</div>
                 <div class="kolrrhh-history-person-sub">Legajo ${escapeHtml(String(row?.legajo || '—'))}</div>
               </td>
-              <td class="kolrrhh-history-cell kolrrhh-mensual-local-money">${escapeHtml(moneyAR(row?.monto || 0))}</td>
+              ${columns.map(field => `<td class="kolrrhh-history-cell kolrrhh-mensual-local-money${row.pagos_haberes?.[field] ? ' kolrrhh-haber-pagado' : ''}"${row.pagos_haberes?.[field] ? ' title="Pagado en Administracion"' : ''}>${escapeHtml(moneyAR(row[field] || 0))}</td>`).join('')}
             </tr>
           `).join('')}
         </tbody>
         <tfoot>
           <tr>
             <th>Total</th>
-            <th class="kolrrhh-mensual-local-total">${escapeHtml(moneyAR(total || 0))}</th>
+            ${totals.map(amount => `<th class="kolrrhh-mensual-local-total">${escapeHtml(moneyAR(amount))}</th>`).join('')}
           </tr>
         </tfoot>
       </table>
@@ -2478,7 +2483,7 @@ function buildMensualLocalGroupsHtml(rows, total){
       ${blocks.map(group => `
         <div class="kolrrhh-locales-block kolrrhh-mensual-local-block">
           <div class="kolrrhh-locales-month">${escapeHtml(group.area)}</div>
-          ${buildMensualLocalTableHtml(group.rows, group.total)}
+          ${buildMensualLocalTableHtml(group.rows)}
         </div>
       `).join('')}
       <div class="kolrrhh-mensual-local-grand-total">
